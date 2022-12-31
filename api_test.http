@@ -1,0 +1,13 @@
+# -*- restclient -*-
+
+:swaf = http://localhost:8000
+
+# Health check
+GET :swaf/health
+
+# Login
+POST :swaf/login
+
+# Get the current user's details
+GET :swaf/user/current
+Accept: application/json
