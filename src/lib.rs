@@ -1,9 +1,10 @@
-use auth::policy::User;
-use auth::session::Session;
+use auth::{policy::User, session::Session, RequestAuthorizor};
 use config::Config;
+use rocket::fs::NamedFile;
 use rocket::http::{Cookie, CookieJar};
 use rocket::serde::json::Json;
 use rocket::{fairing::AdHoc, Build, Rocket};
+use std::path::{Path, PathBuf};
 use util::now_as_secs;
 
 mod auth;
@@ -33,8 +34,20 @@ fn login(cookies: &CookieJar<'_>) -> Result<&'static str, ()> {
     Ok("Ok")
 }
 
+#[get("/file/<file..>")]
+async fn get_file_data(authorizer: RequestAuthorizor, file: PathBuf) -> Option<NamedFile> {
+    let auth_res = authorizer.require("file:ReadData", &file).ok();
+    if auth_res.is_err() {
+        return None;
+    }
+    // TODO: Remove hard-coded repo path
+    NamedFile::open(Path::new("repo/file_root").join(file))
+        .await
+        .ok()
+}
+
 pub fn launch() -> Rocket<Build> {
     rocket::build()
-        .mount("/", routes![health, user_current, login])
+        .mount("/", routes![health, user_current, login, get_file_data])
         .attach(AdHoc::config::<Config>())
 }

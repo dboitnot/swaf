@@ -5,7 +5,7 @@ use rocket::serde::{Deserialize, Serialize};
 #[path = "policy_tests.rs"]
 mod policy_tests;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(crate = "rocket::serde")]
 pub struct User {
     pub login_name: String,
@@ -29,7 +29,7 @@ pub enum Effect {
     Deny,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(crate = "rocket::serde")]
 pub struct PolicyStatement {
     pub effect: Effect,
@@ -64,9 +64,9 @@ pub trait PolicyStore {
 }
 
 impl User {
-    pub fn may_perform<S: PolicyStore>(
+    pub fn may_perform(
         &self,
-        policy_store: &S,
+        policy_store: Box<dyn PolicyStore>,
         action: &str,
         resource: &str,
     ) -> bool {

@@ -9,3 +9,4 @@ edition = "2021"
 [dependencies]
 rocket = { version="0.5.0-rc.2", features=["secrets", "json"] }
 wildflower = "0.1.1"
+futures = {} # Use whatever version rocket is bringing in

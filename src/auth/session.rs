@@ -22,7 +22,7 @@ pub struct Session {
 impl<'r> FromRequest<'r> for Session {
     type Error = ();
 
-    async fn from_request(request: &'r Request<'_>) -> Outcome<Session, ()> {
+    async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
         let now = try_outcome!(now_as_secs().into_outcome(Status::InternalServerError));
         request
             .cookies()
