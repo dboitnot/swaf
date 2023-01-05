@@ -5,9 +5,10 @@ use rocket::fs::NamedFile;
 use rocket::http::{Cookie, CookieJar, Status};
 use rocket::serde::json;
 use rocket::serde::json::Json;
+use rocket::State;
 use rocket::{fairing::AdHoc, Build, Rocket};
 use std::io::ErrorKind;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use util::now_as_secs;
 
 mod auth;
@@ -44,10 +45,13 @@ fn login(cookies: &CookieJar<'_>) -> Result<&'static str, Status> {
 }
 
 #[get("/file/<file..>")]
-async fn get_file_data(authorizer: RequestAuthorizor, file: PathBuf) -> Result<NamedFile, Status> {
+async fn get_file_data(
+    authorizer: RequestAuthorizor,
+    file: PathBuf,
+    config: &State<Config>,
+) -> Result<NamedFile, Status> {
     authorizer.require("file:ReadData", &file).ok()?;
-    // TODO: Remove hard-coded repo path
-    NamedFile::open(Path::new("repo/file_root").join(file))
+    NamedFile::open(config.file_root.join(file))
         .await
         .map_err(|e| match e.kind() {
             ErrorKind::NotFound => Status::NotFound,

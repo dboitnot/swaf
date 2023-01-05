@@ -62,26 +62,3 @@ impl PolicyStatement {
 pub trait PolicyStore {
     fn group_named(&self, name: &str) -> Option<&Group>;
 }
-
-impl User {
-    pub fn may_perform(
-        &self,
-        policy_store: Box<dyn PolicyStore>,
-        action: &str,
-        resource: &str,
-    ) -> bool {
-        matches!(
-            self.groups
-                .iter()
-                .map(|g| policy_store.group_named(g))
-                .filter(|o| o.is_some())
-                .flat_map(|o| o.unwrap().policy_statements.iter())
-                .chain(self.policy_statements.iter())
-                .map(|s| s.effect_on(action, resource))
-                .filter(|o| o.is_some())
-                .flatten()
-                .reduce(|acc, e| if acc == Effect::Deny { acc } else { e }),
-            Some(Effect::Allow)
-        )
-    }
-}
