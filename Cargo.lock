@@ -1152,6 +1152,7 @@ name = "swaf"
 version = "0.1.0"
 dependencies = [
  "futures",
+ "log",
  "rocket",
  "wildflower",
 ]

@@ -6,6 +6,7 @@ use crate::auth::{
     session::Session,
 };
 use futures::executor;
+use log::{info, warn};
 use rocket::http::Status;
 use rocket::outcome::try_outcome;
 use rocket::request::{FromRequest, Outcome, Request};
@@ -32,6 +33,7 @@ impl<'r> FromRequest<'r> for SessionPolicyStore {
 }
 
 pub struct RequestAuthorizor {
+    username: String,
     policy_statements: Vec<PolicyStatement>,
 }
 
@@ -51,7 +53,10 @@ impl<'r> FromRequest<'r> for RequestAuthorizor {
             .chain(user.policy_statements.iter())
             .cloned()
             .collect();
-        Outcome::Success(RequestAuthorizor { policy_statements })
+        Outcome::Success(RequestAuthorizor {
+            username: user.login_name,
+            policy_statements,
+        })
     }
 }
 
@@ -73,21 +78,33 @@ impl RequestAuthorizor {
         }
     }
 
-    pub fn require<R: ToResourceId>(self, action: &str, resource: &R) -> RequestAuthorizorResult {
+    pub fn require<R: ToResourceId + std::fmt::Debug>(
+        self,
+        action: &str,
+        resource: &R,
+    ) -> RequestAuthorizorResult {
         let resource_id = resource.to_resource_id();
         if resource_id.is_none() {
+            warn!("Error extracting ID from resource: {:?}", resource);
             return self.result(Err(Status::InternalServerError));
         }
+        let resource_id = resource_id.unwrap();
         let res = match self
             .policy_statements
             .iter()
-            .map(|s| s.effect_on(action, resource_id.unwrap()))
+            .map(|s| s.effect_on(action, resource_id))
             .filter(|o| o.is_some())
             .flatten()
             .reduce(|acc, e| if acc == Effect::Deny { acc } else { e })
         {
             Some(Effect::Allow) => Ok(()),
-            _ => Err(Status::Unauthorized),
+            _ => {
+                info!(
+                    "User '{}' is not authorized for '{}' on '{}'.",
+                    self.username, action, resource_id
+                );
+                Err(Status::Unauthorized)
+            }
         };
         self.result(res)
     }
@@ -99,7 +116,14 @@ pub struct RequestAuthorizorResult {
 }
 
 impl RequestAuthorizorResult {
-    pub fn require<R: ToResourceId>(self, action: &str, resource: &R) -> RequestAuthorizorResult {
+    pub fn require<R: ToResourceId + std::fmt::Debug>(
+        self,
+        action: &str,
+        resource: &R,
+    ) -> RequestAuthorizorResult {
+        if self.result.is_err() {
+            return self;
+        }
         self.authorizor.require(action, resource)
     }
 

@@ -3,7 +3,7 @@ use rocket::outcome::{try_outcome, IntoOutcome};
 use rocket::request::{FromRequest, Outcome, Request};
 use rocket::serde::{json, Deserialize, Serialize};
 
-use crate::auth::policy::User;
+use crate::auth::policy::{Effect, PolicyStatement, User};
 use crate::util::now_as_secs;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -24,6 +24,7 @@ impl<'r> FromRequest<'r> for Session {
 
     async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
         let now = try_outcome!(now_as_secs().into_outcome(Status::InternalServerError));
+        // TODO: Load user from store
         request
             .cookies()
             .get_private("session")
@@ -35,7 +36,11 @@ impl<'r> FromRequest<'r> for Session {
                     login_name: String::from("fake"),
                     full_name: Some(String::from("Fakie McFakeface")),
                     groups: vec![String::from("fakers")],
-                    policy_statements: vec![],
+                    policy_statements: vec![PolicyStatement {
+                        effect: Effect::Allow,
+                        actions: vec![String::from("*")],
+                        resources: vec![String::from("*")],
+                    }],
                 },
             })
             .into_outcome((Status::Unauthorized, ()))

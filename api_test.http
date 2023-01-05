@@ -11,3 +11,6 @@ POST :swaf/login
 # Get the current user's details
 GET :swaf/user/current
 Accept: application/json
+
+# Download test file
+GET :swaf/file/hi.txt
