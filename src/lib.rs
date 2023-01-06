@@ -1,18 +1,17 @@
 use auth::session::{Session, SessionCookie};
-use auth::{policy::User, RequestAuthorizor};
+use auth::{policy::User, RequestedRegularFileDataReadable};
 use config::Config;
 use rocket::fs::NamedFile;
 use rocket::http::{Cookie, CookieJar, Status};
 use rocket::serde::json;
 use rocket::serde::json::Json;
-use rocket::State;
 use rocket::{fairing::AdHoc, Build, Rocket};
 use std::io::ErrorKind;
-use std::path::PathBuf;
 use util::now_as_secs;
 
 mod auth;
 mod config;
+mod files;
 mod util;
 
 #[macro_use]
@@ -44,14 +43,9 @@ fn login(cookies: &CookieJar<'_>) -> Result<&'static str, Status> {
     Ok("Ok")
 }
 
-#[get("/file/<file..>")]
-async fn get_file_data(
-    authorizer: RequestAuthorizor,
-    file: PathBuf,
-    config: &State<Config>,
-) -> Result<NamedFile, Status> {
-    authorizer.require("file:ReadData", &file).ok()?;
-    NamedFile::open(config.file_root.join(file))
+#[get("/file/<_..>")]
+async fn get_file_data(file: RequestedRegularFileDataReadable) -> Result<NamedFile, Status> {
+    NamedFile::open(file.real_path)
         .await
         .map_err(|e| match e.kind() {
             ErrorKind::NotFound => Status::NotFound,
