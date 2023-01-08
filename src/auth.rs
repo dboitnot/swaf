@@ -4,12 +4,10 @@ pub mod session;
 
 use crate::auth::authorizor::RequestAuthorizor;
 use crate::auth::policy::{Group, PolicyStore};
-use crate::config::Config;
-use crate::files;
+use crate::files::RequestedFile;
 use rocket::http::Status;
 use rocket::outcome::try_outcome;
 use rocket::request::{FromRequest, Outcome, Request};
-use rocket::State;
 use std::path::PathBuf;
 
 pub type SessionPolicyStore = Box<dyn PolicyStore>;
@@ -29,30 +27,6 @@ impl<'r> FromRequest<'r> for SessionPolicyStore {
 
     async fn from_request(_request: &'r Request<'_>) -> Outcome<SessionPolicyStore, ()> {
         Outcome::Success(Box::new(SessionPolicyStoreImpl {}))
-    }
-}
-
-pub struct RequestedFile {
-    pub real_path: PathBuf,
-}
-
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for RequestedFile {
-    type Error = &'static str;
-
-    async fn from_request(request: &'r Request<'_>) -> Outcome<RequestedFile, &'static str> {
-        let config = try_outcome!(request
-            .guard::<&State<Config>>()
-            .await
-            .map_failure(|_| (Status::InternalServerError, "Failed to retrieve config")));
-        let req_path: PathBuf = match request.segments(1..) {
-            Ok(path) => path,
-            Err(_) => return Outcome::Failure((Status::BadRequest, "Invalid path")),
-        };
-        match files::realize(&config.file_root, &req_path, false) {
-            Ok(real_path) => Outcome::Success(RequestedFile { real_path }),
-            _ => Outcome::Failure((Status::BadRequest, "File realization failed")),
-        }
     }
 }
 

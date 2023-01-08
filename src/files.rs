@@ -1,3 +1,8 @@
+use crate::config::Config;
+use rocket::http::Status;
+use rocket::outcome::{try_outcome, IntoOutcome};
+use rocket::request::{FromRequest, Outcome, Request};
+use rocket::State;
 use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
 
@@ -10,11 +15,35 @@ pub enum RealizationError {
     OutsideBase,
 }
 
+pub struct RequestedFile {
+    pub real_path: PathBuf,
+    pub logical_path: PathBuf,
+}
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for RequestedFile {
+    type Error = &'static str;
+
+    async fn from_request(request: &'r Request<'_>) -> Outcome<RequestedFile, &'static str> {
+        let config = try_outcome!(request
+            .guard::<&State<Config>>()
+            .await
+            .map_failure(|_| (Status::InternalServerError, "Failed to retrieve config")));
+        let req_path: PathBuf = match request.segments(1..) {
+            Ok(path) => path,
+            Err(_) => return Outcome::Failure((Status::BadRequest, "Invalid path")),
+        };
+        realize(&config.file_root, &req_path, false)
+            .map_err(|_| "Requested path did not realize")
+            .into_outcome(Status::BadRequest)
+    }
+}
+
 pub fn realize<P: AsRef<Path>>(
     base_path: P,
     req_path: P,
     must_exist: bool,
-) -> Result<PathBuf, RealizationError> {
+) -> Result<RequestedFile, RealizationError> {
     let base_path = base_path
         .as_ref()
         .canonicalize()
@@ -46,9 +75,12 @@ pub fn realize<P: AsRef<Path>>(
         }
         Err(e) => Err(RealizationError::NonCanonicalPath(e)),
     }?;
-    if real_path.starts_with(base_path) {
-        Ok(real_path)
-    } else {
-        Err(RealizationError::OutsideBase)
-    }
+    let logical_path = real_path
+        .strip_prefix(base_path)
+        .map(|p| p.to_path_buf())
+        .map_err(|_| RealizationError::OutsideBase)?;
+    Ok(RequestedFile {
+        real_path,
+        logical_path,
+    })
 }
