@@ -3,12 +3,13 @@ use crate::auth::{
     session::Session,
     SessionPolicyStore,
 };
+use crate::meta::MetadataAuthorizor;
 use futures::executor;
 use log::{info, warn};
 use rocket::http::Status;
 use rocket::outcome::try_outcome;
 use rocket::request::{FromRequest, Outcome, Request};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub struct RequestAuthorizor {
     username: String,
@@ -42,9 +43,9 @@ pub trait ToResourceId {
     fn to_resource_id(&self) -> Option<&str>;
 }
 
-impl ToResourceId for PathBuf {
+impl<P: AsRef<Path>> ToResourceId for P {
     fn to_resource_id(&self) -> Option<&str> {
-        self.to_str()
+        self.as_ref().to_str()
     }
 }
 
@@ -61,13 +62,26 @@ impl RequestAuthorizor {
         action: &str,
         resource: &R,
     ) -> RequestAuthorizorResult {
+        let res = if self.is_allowed(action, resource) {
+            Ok(())
+        } else {
+            Err(Status::Forbidden)
+        };
+        self.result(res)
+    }
+
+    pub fn is_allowed<R: ToResourceId + std::fmt::Debug>(
+        &self,
+        action: &str,
+        resource: &R,
+    ) -> bool {
         let resource_id = resource.to_resource_id();
         if resource_id.is_none() {
             warn!("Error extracting ID from resource: {:?}", resource);
-            return self.result(Err(Status::InternalServerError));
+            return false;
         }
         let resource_id = resource_id.unwrap();
-        let res = match self
+        match self
             .policy_statements
             .iter()
             .map(|s| s.effect_on(action, resource_id))
@@ -75,16 +89,24 @@ impl RequestAuthorizor {
             .flatten()
             .reduce(|acc, e| if acc == Effect::Deny { acc } else { e })
         {
-            Some(Effect::Allow) => Ok(()),
+            Some(Effect::Allow) => true,
             _ => {
                 info!(
                     "User '{}' is not authorized for '{}' on '{}'.",
                     self.username, action, resource_id
                 );
-                Err(Status::Forbidden)
+                false
             }
-        };
-        self.result(res)
+        }
+    }
+}
+
+impl MetadataAuthorizor for RequestAuthorizor {
+    fn may_read_file(&self, logical_path: PathBuf) -> bool {
+        self.is_allowed("file:Read", &logical_path)
+    }
+    fn may_write_file(&self, logical_path: PathBuf) -> bool {
+        self.is_allowed("file:Write", &logical_path)
     }
 }
 

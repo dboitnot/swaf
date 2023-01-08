@@ -14,3 +14,6 @@ Accept: application/json
 
 # Download test file
 GET :swaf/file/hi.txt
+
+# Get file metadata
+GET :swaf/meta/subdir
