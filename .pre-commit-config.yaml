@@ -16,3 +16,25 @@ repos:
       - id: cargo-check
       - id: clippy
         args: ['--', '-D', 'warnings', '-A', 'dead-code']
+
+  - repo: local
+    hooks:
+      - id: elm-review
+        name: elm-review
+        language: system
+        entry: npx elm-review
+        files: \.elm$
+        pass_filenames: false
+        args:
+          - "--ignore-dirs"
+          - .elm-spa
+          - "--elmjson"
+          - spa/elm.json
+
+      - id: elm-format
+        name: elm-format
+        language: system
+        entry: elm-format
+        files: \.elm$
+        args:
+          - "--validate"
