@@ -29,8 +29,7 @@ fn user_current(session: Session) -> Json<User> {
     Json(session.user)
 }
 
-#[post("/login")]
-fn login(cookies: &CookieJar<'_>) -> Result<&'static str, Status> {
+fn add_session_cookie(cookies: &CookieJar) -> Result<(), Status> {
     // TODO: Actually load the user from store
     let exp = now_as_secs()
         .map(|now| now + 300)
@@ -42,6 +41,12 @@ fn login(cookies: &CookieJar<'_>) -> Result<&'static str, Status> {
     let session_cookie =
         json::to_string(&session_cookie).map_err(|_| Status::InternalServerError)?;
     cookies.add_private(Cookie::new("session", session_cookie));
+    Ok(())
+}
+
+#[post("/login")]
+fn login(cookies: &CookieJar<'_>) -> Result<&'static str, Status> {
+    add_session_cookie(cookies)?;
     Ok("Ok")
 }
 
