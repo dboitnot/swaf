@@ -62,7 +62,7 @@ update msg model =
 sendSignIn : Cmd Msg
 sendSignIn =
     Http.post
-        { url = "http://localhost:8000/api/login"
+        { url = "http://localhost:8001/api/login"
         , body = Http.emptyBody
         , expect = userInfoDecoder |> Http.expectJson (RemoteData.fromResult >> SignInResponse)
         }
