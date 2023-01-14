@@ -12,6 +12,7 @@ import Gen.Route
 import Json.Decode as Json
 import Model exposing (UserInfo)
 import Request exposing (Request)
+import Url exposing (Url)
 
 
 type alias Flags =
@@ -19,7 +20,9 @@ type alias Flags =
 
 
 type alias Model =
-    { user : Maybe User }
+    { user : Maybe User
+    , baseUrl : String
+    }
 
 
 type alias User =
@@ -32,8 +35,13 @@ type Msg
 
 
 init : Request -> Flags -> ( Model, Cmd Msg )
-init _ _ =
-    ( { user = Nothing }, Cmd.none )
+init req _ =
+    let
+        reqUrl : Url
+        reqUrl =
+            req.url
+    in
+    ( { user = Nothing, baseUrl = Url.toString { reqUrl | path = "" } }, Cmd.none )
 
 
 update : Request -> Msg -> Model -> ( Model, Cmd Msg )

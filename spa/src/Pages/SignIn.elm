@@ -15,10 +15,10 @@ import W.Styles
 
 
 page : Shared.Model -> Request.With Params -> Page.With Model Msg
-page _ _ =
+page model _ =
     Page.advanced
-        { init = init
-        , update = update
+        { init = init model
+        , update = update model
         , view = view
         , subscriptions = subscriptions
         }
@@ -29,12 +29,18 @@ page _ _ =
 
 
 type alias Model =
-    { signInRequest : WebData UserInfo }
+    { getUserRequest : WebData UserInfo
+    , signInRequest : WebData UserInfo
+    }
 
 
-init : ( Model, Effect Msg )
-init =
-    ( { signInRequest = RemoteData.NotAsked }, Effect.none )
+init : Shared.Model -> ( Model, Effect Msg )
+init sharedModel =
+    ( { getUserRequest = RemoteData.NotAsked
+      , signInRequest = RemoteData.NotAsked
+      }
+    , Effect.fromCmd (sendGetUser sharedModel)
+    )
 
 
 
@@ -42,15 +48,22 @@ init =
 
 
 type Msg
-    = ClickedSignIn
+    = GetUserResponse (WebData UserInfo)
+    | ClickedSignIn
     | SignInResponse (WebData UserInfo)
 
 
-update : Msg -> Model -> ( Model, Effect Msg )
-update msg model =
+update : Shared.Model -> Msg -> Model -> ( Model, Effect Msg )
+update sharedModel msg model =
     case msg of
+        GetUserResponse (RemoteData.Success userInfo) ->
+            ( model, Effect.fromShared (Shared.SignIn { info = userInfo }) )
+
+        GetUserResponse r ->
+            ( { model | getUserRequest = r }, Effect.none )
+
         ClickedSignIn ->
-            ( model, Effect.fromCmd sendSignIn )
+            ( model, Effect.fromCmd (sendSignIn sharedModel) )
 
         SignInResponse (RemoteData.Success userInfo) ->
             ( model, Effect.fromShared (Shared.SignIn { info = userInfo }) )
@@ -59,10 +72,18 @@ update msg model =
             ( { model | signInRequest = r }, Effect.none )
 
 
-sendSignIn : Cmd Msg
-sendSignIn =
+sendGetUser : Shared.Model -> Cmd Msg
+sendGetUser sharedModel =
+    Http.get
+        { url = sharedModel.baseUrl ++ "/api/user/current"
+        , expect = userInfoDecoder |> Http.expectJson (RemoteData.fromResult >> GetUserResponse)
+        }
+
+
+sendSignIn : Shared.Model -> Cmd Msg
+sendSignIn sharedModel =
     Http.post
-        { url = "http://localhost:8001/api/login"
+        { url = sharedModel.baseUrl ++ "/api/login"
         , body = Http.emptyBody
         , expect = userInfoDecoder |> Http.expectJson (RemoteData.fromResult >> SignInResponse)
         }
@@ -74,6 +95,8 @@ sendSignIn =
 
 view : Model -> View Msg
 view _ =
+    -- TODO: Add a spinner for the getUserRequest
+    -- TODO: Disable sign-in button after it's been clicked
     { title = "Sign In"
     , body =
         [ H.div []
