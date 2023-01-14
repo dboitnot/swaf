@@ -2,47 +2,46 @@ module Pages.Home_ exposing (Model, Msg, page)
 
 import Html as H
 import Http
-import Model exposing (User, userDecoder)
 import Page
 import RemoteData exposing (WebData)
 import Request exposing (Request)
-import Shared
+import Shared exposing (User)
 import View exposing (View)
 import W.Styles
 
 
 type Msg
-    = UserResponse (WebData User)
+    = NoOp
 
 
 type alias Model =
     { clickCount : Int
-    , user : WebData User
+    , user : User
     }
 
 
 page : Shared.Model -> Request -> Page.With Model Msg
 page _ _ =
-    Page.element
-        { init = init
-        , update = update
-        , view = view
-        , subscriptions = subscriptions
-        }
+    Page.protected.element
+        (\user ->
+            { init = init user
+            , update = update
+            , view = view
+            , subscriptions = subscriptions
+            }
+        )
 
 
-init : ( Model, Cmd Msg )
-init =
-    ( { clickCount = 0, user = RemoteData.Loading }
-    , getUser
+init : User -> ( Model, Cmd Msg )
+init user =
+    ( { clickCount = 0, user = user }
+    , Cmd.none
     )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model =
-    case msg of
-        UserResponse user ->
-            ( { model | user = user }, Cmd.none )
+update _ model =
+    ( model, Cmd.none )
 
 
 view : Model -> View Msg
@@ -52,8 +51,6 @@ view model =
         [ H.div []
             [ W.Styles.globalStyles
             , W.Styles.baseTheme
-
-            -- , W.Button.view [] { label = [ H.text ("Hi " ++ String.fromInt model.clickCount) ], onClick = Clicked }
             , H.text (textToDisplay model)
             ]
         ]
@@ -62,31 +59,14 @@ view model =
 
 textToDisplay : Model -> String
 textToDisplay model =
-    case model.user of
-        RemoteData.NotAsked ->
-            "Initializing..."
+    case model.user.info.fullName of
+        Just name ->
+            "Hi there " ++ name
 
-        RemoteData.Loading ->
-            "Loading..."
-
-        RemoteData.Failure (Http.BadStatus 401) ->
-            "Got a 401"
-
-        RemoteData.Failure e ->
-            "Error: " ++ Debug.toString e
-
-        RemoteData.Success _ ->
-            "Got a user"
+        Nothing ->
+            model.user.info.loginName
 
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.none
-
-
-getUser : Cmd Msg
-getUser =
-    Http.get
-        { url = "http://localhost:8000/user/current"
-        , expect = userDecoder |> Http.expectJson (RemoteData.fromResult >> UserResponse)
-        }

@@ -1,6 +1,6 @@
 # -*- restclient -*-
 
-:swaf = http://localhost:8000
+:swaf = http://localhost:8000/api
 
 # Health check
 GET :swaf/health

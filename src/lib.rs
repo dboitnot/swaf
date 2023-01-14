@@ -8,6 +8,7 @@ use rocket::serde::json;
 use rocket::serde::json::Json;
 use rocket::{fairing::AdHoc, Build, Rocket};
 use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
 use util::now_as_secs;
 
 mod auth;
@@ -45,9 +46,17 @@ fn add_session_cookie(cookies: &CookieJar) -> Result<(), Status> {
 }
 
 #[post("/login")]
-fn login(cookies: &CookieJar<'_>) -> Result<&'static str, Status> {
+fn login(cookies: &CookieJar<'_>) -> Result<Json<User>, Status> {
     add_session_cookie(cookies)?;
-    Ok("Ok")
+
+    // TODO: Actually authenticate
+    let user = User {
+        login_name: String::from("fake"),
+        full_name: Some(String::from("Fakie McFakeface")),
+        groups: vec![String::from("fakers")],
+        policy_statements: vec![],
+    };
+    Ok(Json(user))
 }
 
 #[get("/file/<_..>")]
@@ -65,11 +74,22 @@ async fn get_file_meta(meta: FileMetadata) -> Json<FileMetadata> {
     Json(meta)
 }
 
+#[get("/<file..>")]
+async fn spa_files(mut file: PathBuf) -> Option<NamedFile> {
+    if file.components().count() < 1 {
+        file.push("index.html");
+    }
+    NamedFile::open(Path::new("spa/public/").join(file))
+        .await
+        .ok()
+}
+
 pub fn launch() -> Rocket<Build> {
     rocket::build()
         .mount(
-            "/",
+            "/api",
             routes![health, user_current, login, get_file_data, get_file_meta],
         )
+        .mount("/", routes![spa_files])
         .attach(AdHoc::config::<Config>())
 }

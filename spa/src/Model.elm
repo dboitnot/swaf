@@ -1,21 +1,17 @@
-module Model exposing (User, userDecoder)
+module Model exposing (UserInfo, userInfoDecoder)
 
 import Json.Decode as Decode exposing (Decoder, maybe, string)
 import Json.Decode.Pipeline exposing (optional, required)
 
 
-type alias User =
+type alias UserInfo =
     { loginName : String
     , fullName : Maybe String
     }
 
 
-userDecoder : Decoder User
-userDecoder =
-    Decode.succeed User
+userInfoDecoder : Decoder UserInfo
+userInfoDecoder =
+    Decode.succeed UserInfo
         |> required "login_name" string
         |> optional "full_name" (maybe string) Nothing
-
-
-
--- |> optional "full_name" string
