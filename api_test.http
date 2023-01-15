@@ -17,3 +17,6 @@ GET :swaf/file/hi.txt
 
 # Get file metadata
 GET :swaf/meta/subdir
+
+# Get directory listing
+GET :swaf/ls/

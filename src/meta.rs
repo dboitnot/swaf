@@ -10,7 +10,6 @@ pub struct FileMetadata {
     pub parent: Option<PathBuf>,
     pub file_name: Option<String>,
     pub is_dir: bool,
-    pub children: Option<Vec<FileMetadata>>,
     pub may_read: bool,
     pub may_write: bool,
 }
@@ -24,7 +23,6 @@ pub trait MetadataAuthorizor {
 pub fn metadata_for_file<P>(
     real_path: P,
     logical_path: P,
-    include_children: bool,
     authorizor: &dyn MetadataAuthorizor,
 ) -> Result<FileMetadata, Error>
 where
@@ -33,42 +31,6 @@ where
     let real_path = real_path.as_ref();
     let logical_path = logical_path.as_ref();
     let is_dir = real_path.is_dir();
-    let children = if include_children && is_dir {
-        let dir_entry_it = real_path.read_dir()?;
-        Some(
-            dir_entry_it
-                .map(|r| {
-                    if r.is_err() {
-                        warn!("Error reading children of {:?}: {:?}", &real_path, r)
-                    };
-                    r
-                })
-                .filter(|r| r.is_ok())
-                .flatten()
-                .map(|e| e.path())
-                .map(|p| {
-                    (
-                        p.clone(),
-                        logical_path.join(
-                            p.strip_prefix(real_path)
-                                .expect("failure stripping parent from child path"),
-                        ),
-                    )
-                })
-                .flat_map(
-                    |(r, l)| match metadata_for_file(&r, &l, false, authorizor) {
-                        Ok(m) => Some(m),
-                        Err(e) => {
-                            warn!("Error reading child metadata of {:?}: {:?}", r, e);
-                            None
-                        }
-                    },
-                )
-                .collect(),
-        )
-    } else {
-        None
-    };
     Ok(FileMetadata {
         path: logical_path.to_path_buf(),
         parent: logical_path.parent().map(|p| p.to_path_buf()),
@@ -77,8 +39,47 @@ where
             .and_then(|o| o.to_str())
             .map(String::from),
         is_dir,
-        children,
         may_read: authorizor.may_read_file(logical_path.to_path_buf()),
         may_write: authorizor.may_write_file(logical_path.to_path_buf()),
     })
+}
+
+pub fn file_children<P>(
+    real_path: P,
+    logical_path: P,
+    authorizor: &dyn MetadataAuthorizor,
+) -> Result<Vec<FileMetadata>, Error>
+where
+    P: AsRef<Path>,
+{
+    let real_path = real_path.as_ref();
+    let logical_path = logical_path.as_ref();
+    let dir_entry_it = real_path.read_dir()?;
+    Ok(dir_entry_it
+        .map(|r| {
+            if r.is_err() {
+                warn!("Error reading children of {:?}: {:?}", &real_path, r)
+            };
+            r
+        })
+        .filter(|r| r.is_ok())
+        .flatten()
+        .map(|e| e.path())
+        .map(|p| {
+            (
+                p.clone(),
+                logical_path.join(
+                    p.strip_prefix(real_path)
+                        .expect("failure stripping parent from child path"),
+                ),
+            )
+        })
+        .flat_map(|(r, l)| match metadata_for_file(&r, &l, authorizor) {
+            Ok(m) => Some(m),
+            Err(e) => {
+                warn!("Error reading child metadata of {:?}: {:?}", r, e);
+                None
+            }
+        })
+        .collect())
 }

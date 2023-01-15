@@ -1,4 +1,5 @@
 use auth::session::{Session, SessionCookie};
+use auth::FileChildren;
 use auth::{policy::User, RequestedRegularFileDataReadable};
 use config::Config;
 use meta::FileMetadata;
@@ -74,6 +75,11 @@ async fn get_file_meta(meta: FileMetadata) -> Json<FileMetadata> {
     Json(meta)
 }
 
+#[get("/ls/<_..>")]
+async fn get_file_children(children: FileChildren) -> Json<FileChildren> {
+    Json(children)
+}
+
 #[get("/<file..>")]
 async fn spa_files(mut file: PathBuf) -> Option<NamedFile> {
     if file.components().count() < 1 {
@@ -88,7 +94,14 @@ pub fn launch() -> Rocket<Build> {
     rocket::build()
         .mount(
             "/api",
-            routes![health, user_current, login, get_file_data, get_file_meta],
+            routes![
+                health,
+                user_current,
+                login,
+                get_file_data,
+                get_file_meta,
+                get_file_children
+            ],
         )
         .mount("/", routes![spa_files])
         .attach(AdHoc::config::<Config>())

@@ -5,10 +5,11 @@ pub mod session;
 use crate::auth::authorizor::RequestAuthorizor;
 use crate::auth::policy::{Group, PolicyStore};
 use crate::files::RequestedFile;
-use crate::meta::{metadata_for_file, FileMetadata};
+use crate::meta::{file_children, metadata_for_file, FileMetadata};
 use rocket::http::Status;
 use rocket::outcome::try_outcome;
 use rocket::request::{FromRequest, Outcome, Request};
+use rocket::serde::Serialize;
 use std::path::PathBuf;
 
 pub type SessionPolicyStore = Box<dyn PolicyStore>;
@@ -33,7 +34,7 @@ impl<'r> FromRequest<'r> for SessionPolicyStore {
 
 pub struct RequestedFileDataReadable {
     pub real_path: PathBuf,
-    logical_path: PathBuf,
+    pub logical_path: PathBuf,
 }
 
 #[rocket::async_trait]
@@ -103,8 +104,37 @@ impl<'r> FromRequest<'r> for FileMetadata {
         if !authorizor.is_allowed("file:Read", &file.logical_path) {
             return Outcome::Failure((Status::Forbidden, "Access Denied"));
         };
-        match metadata_for_file(&file.real_path, &file.logical_path, true, &authorizor) {
+        match metadata_for_file(&file.real_path, &file.logical_path, &authorizor) {
             Ok(m) => Outcome::Success(m),
+            Err(e) => {
+                warn!("Error fetching metadata for {:?}: {:?}", file.real_path, e);
+                Outcome::Failure((Status::InternalServerError, "Internal Error"))
+            }
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(crate = "rocket::serde")]
+pub struct FileChildren {
+    pub children: Vec<FileMetadata>,
+}
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for FileChildren {
+    type Error = &'static str;
+
+    async fn from_request(request: &'r Request<'_>) -> Outcome<FileChildren, &'static str> {
+        let authorizor = try_outcome!(request
+            .guard::<RequestAuthorizor>()
+            .await
+            .map_failure(|(s, _)| (s, "No session authorizor")));
+        let file = try_outcome!(request.guard::<RequestedFile>().await);
+        if !authorizor.is_allowed("file:Read", &file.logical_path) {
+            return Outcome::Failure((Status::Forbidden, "Access Denied"));
+        };
+        match file_children(&file.real_path, &file.logical_path, &authorizor) {
+            Ok(children) => Outcome::Success(FileChildren { children }),
             Err(e) => {
                 warn!("Error fetching metadata for {:?}: {:?}", file.real_path, e);
                 Outcome::Failure((Status::InternalServerError, "Internal Error"))
