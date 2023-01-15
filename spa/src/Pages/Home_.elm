@@ -1,6 +1,7 @@
 module Pages.Home_ exposing (Model, Msg, page)
 
 import Html as H
+import Html.Events exposing (onClick)
 import Http
 import Model exposing (FileChildren, FileMetadata, fileChildrenDecoder, fileMetadataDecoder)
 import Page
@@ -14,6 +15,7 @@ import W.Styles
 type Msg
     = GotMetadata (WebData FileMetadata)
     | GotChildren (WebData FileChildren)
+    | ChildClicked FileMetadata
 
 
 type alias Model =
@@ -54,6 +56,19 @@ update sharedModel msg model =
         GotChildren children ->
             ( { model | children = children }, Cmd.none )
 
+        ChildClicked childMeta ->
+            let
+                meta : WebData FileMetadata
+                meta =
+                    RemoteData.Success childMeta
+            in
+            ( { model
+                | metadata = meta
+                , children = RemoteData.NotAsked
+              }
+            , updateMetaCmd sharedModel meta
+            )
+
 
 updateMetaCmd : Shared.Model -> WebData FileMetadata -> Cmd Msg
 updateMetaCmd sharedModel metaResponse =
@@ -84,7 +99,7 @@ getMetadata sharedModel filePath =
 getChildren : Shared.Model -> String -> Cmd Msg
 getChildren sharedModel dirPath =
     Http.get
-        { url = sharedModel.baseUrl ++ "/api/ls" ++ dirPath
+        { url = sharedModel.baseUrl ++ "/api/ls/" ++ dirPath
         , expect = fileChildrenDecoder |> Http.expectJson (RemoteData.fromResult >> GotChildren)
         }
 
@@ -124,7 +139,7 @@ userDisplayName user =
             user.info.loginName
 
 
-fileDisplay : Model -> H.Html msg
+fileDisplay : Model -> H.Html Msg
 fileDisplay model =
     case model.metadata of
         RemoteData.NotAsked ->
@@ -140,7 +155,7 @@ fileDisplay model =
             H.text "Something went wrong"
 
 
-fileDisplayWithMeta : Model -> FileMetadata -> H.Html msg
+fileDisplayWithMeta : Model -> FileMetadata -> H.Html Msg
 fileDisplayWithMeta model meta =
     H.div []
         ([ H.text "Got Metadata"
@@ -155,7 +170,7 @@ fileDisplayWithMeta model meta =
         )
 
 
-dirListing : Model -> H.Html msg
+dirListing : Model -> H.Html Msg
 dirListing model =
     case model.children of
         RemoteData.Success children ->
@@ -165,12 +180,12 @@ dirListing model =
             dirListingLoading
 
 
-dirListingTable : FileChildren -> H.Html msg
+dirListingTable : FileChildren -> H.Html Msg
 dirListingTable children =
     H.ul [] (children.children |> List.map dirListingTableEntry)
 
 
-dirListingTableEntry : FileMetadata -> H.Html msg
+dirListingTableEntry : FileMetadata -> H.Html Msg
 dirListingTableEntry meta =
     let
         fileName : String
@@ -182,7 +197,7 @@ dirListingTableEntry meta =
                 Nothing ->
                     "?"
     in
-    H.li [] [ H.text fileName ]
+    H.li [] [ H.span [ onClick (ChildClicked meta) ] [ H.text fileName ] ]
 
 
 dirListingLoading : H.Html msg
