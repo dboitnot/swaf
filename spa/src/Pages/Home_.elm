@@ -1,21 +1,26 @@
 module Pages.Home_ exposing (Model, Msg, page)
 
+import Browser.Navigation as Nav
 import Html as H
-import Html.Events exposing (onClick)
 import Http
+import Icons
 import Model exposing (FileChildren, FileMetadata, fileChildrenDecoder, fileMetadataDecoder)
 import Page
 import RemoteData exposing (WebData)
 import Request exposing (Request)
 import Shared exposing (User)
 import View exposing (View)
+import W.Button
+import W.Container
 import W.Styles
+import W.Table
 
 
 type Msg
     = GotMetadata (WebData FileMetadata)
     | GotChildren (WebData FileChildren)
     | ChildClicked FileMetadata
+    | DownloadClicked FileMetadata
 
 
 type alias Model =
@@ -69,6 +74,9 @@ update sharedModel msg model =
             , updateMetaCmd sharedModel meta
             )
 
+        DownloadClicked meta ->
+            ( model, Nav.load (sharedModel.baseUrl ++ "/api/file/" ++ meta.path) )
+
 
 updateMetaCmd : Shared.Model -> WebData FileMetadata -> Cmd Msg
 updateMetaCmd sharedModel metaResponse =
@@ -115,10 +123,11 @@ view user model =
         [ H.div []
             [ W.Styles.globalStyles
             , W.Styles.baseTheme
-            , menuBar user model
-            , H.br [] []
-            , fileDisplay model
-            , H.br [] []
+            , W.Container.view
+                [ W.Container.alignCenterX ]
+                [ menuBar user model
+                , fileDisplay model
+                ]
             ]
         ]
     }
@@ -182,22 +191,33 @@ dirListing model =
 
 dirListingTable : FileChildren -> H.Html Msg
 dirListingTable children =
-    H.ul [] (children.children |> List.map dirListingTableEntry)
+    W.Table.view [ W.Table.onClick ChildClicked ]
+        [ W.Table.column [ W.Table.alignCenter, W.Table.width 20 ] { label = "", content = fileTypeIcon }
+        , W.Table.string [] { label = "Name", value = \meta -> Maybe.withDefault "?" meta.fileName }
+        , W.Table.column [ W.Table.alignCenter, W.Table.width 30 ] { label = "", content = fileDownloadIcon }
+        ]
+        children.children
 
 
-dirListingTableEntry : FileMetadata -> H.Html Msg
-dirListingTableEntry meta =
-    let
-        fileName : String
-        fileName =
-            case meta.fileName of
-                Just name ->
-                    name
+fileTypeIcon : FileMetadata -> H.Html Msg
+fileTypeIcon meta =
+    if meta.isDir then
+        Icons.folder
 
-                Nothing ->
-                    "?"
-    in
-    H.li [] [ H.span [ onClick (ChildClicked meta) ] [ H.text fileName ] ]
+    else
+        H.text ""
+
+
+fileDownloadIcon : FileMetadata -> H.Html Msg
+fileDownloadIcon meta =
+    if meta.isDir then
+        H.text ""
+
+    else if meta.mayRead then
+        W.Button.view [ W.Button.icon ] { label = [ Icons.download ], onClick = DownloadClicked meta }
+
+    else
+        Icons.downloadOff
 
 
 dirListingLoading : H.Html msg
