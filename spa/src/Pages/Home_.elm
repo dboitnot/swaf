@@ -2,6 +2,8 @@ module Pages.Home_ exposing (Model, Msg, page)
 
 import Browser.Navigation as Nav
 import Html as H
+import Html.Attributes as A
+import Html.Events as E
 import Http
 import Icons as I
 import Model exposing (FileChildren, FileMetadata, fileChildrenDecoder, fileMetadataDecoder)
@@ -10,7 +12,6 @@ import RemoteData exposing (WebData)
 import Request exposing (Request)
 import Shared exposing (User)
 import View exposing (View)
-import W.Button
 import W.Container
 import W.Styles
 import W.Table
@@ -191,21 +192,29 @@ dirListing model =
 
 dirListingTable : FileChildren -> H.Html Msg
 dirListingTable children =
-    W.Table.view [ W.Table.onClick ChildClicked ]
+    W.Table.view []
         [ W.Table.column [ W.Table.alignCenter, W.Table.width 20 ] { label = "", content = fileTypeIcon }
-        , W.Table.string [] { label = "Name", value = \meta -> Maybe.withDefault "?" meta.fileName }
-        , W.Table.column [ W.Table.alignCenter, W.Table.width 30 ] { label = "", content = fileDownloadIcon }
+        , W.Table.column [] { label = "Name", content = fileNameCell }
         ]
         children.children
+
+
+fileNameCell : FileMetadata -> H.Html Msg
+fileNameCell meta =
+    H.span
+        [ E.onClick (ChildClicked meta)
+        , A.style "cursor" "pointer"
+        ]
+        [ H.text (Maybe.withDefault "?" meta.fileName) ]
 
 
 fileTypeIcon : FileMetadata -> H.Html Msg
 fileTypeIcon meta =
     if meta.isDir then
-        I.folder []
+        I.folder [ I.onClick (ChildClicked meta) ]
 
     else
-        H.text ""
+        fileDownloadIcon meta
 
 
 fileDownloadIcon : FileMetadata -> H.Html Msg
@@ -214,7 +223,7 @@ fileDownloadIcon meta =
         H.text ""
 
     else if meta.mayRead then
-        W.Button.view [ W.Button.icon ] { label = [ I.download [] ], onClick = DownloadClicked meta }
+        I.download [ I.onClick (DownloadClicked meta) ]
 
     else
         I.downloadOff []
