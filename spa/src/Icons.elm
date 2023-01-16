@@ -5,6 +5,7 @@ module Icons exposing
     , filled
     , folder
     , grade
+    , home
     , icon
     , onClick
     , opticalSize
@@ -147,6 +148,11 @@ download =
 downloadOff : List (Attribute msg) -> H.Html msg
 downloadOff =
     icon "file_download_off"
+
+
+home : List (Attribute msg) -> H.Html msg
+home =
+    icon "home"
 
 
 upload : List (Attribute msg) -> H.Html msg

@@ -11,6 +11,7 @@ import Page
 import RemoteData exposing (WebData)
 import Request exposing (Request)
 import Shared exposing (User)
+import Util exposing (boolToMaybe, flattenMaybeList)
 import View exposing (View)
 import W.Container
 import W.Styles
@@ -20,6 +21,7 @@ import W.Table
 type Msg
     = GotMetadata (WebData FileMetadata)
     | GotChildren (WebData FileChildren)
+    | CrumbClicked String
     | ChildClicked FileMetadata
     | DownloadClicked FileMetadata
 
@@ -61,6 +63,14 @@ update sharedModel msg model =
 
         GotChildren children ->
             ( { model | children = children }, Cmd.none )
+
+        CrumbClicked path ->
+            ( { model
+                | metadata = RemoteData.NotAsked
+                , children = RemoteData.NotAsked
+              }
+            , getMetadata sharedModel path
+            )
 
         ChildClicked childMeta ->
             let
@@ -168,16 +178,51 @@ fileDisplay model =
 fileDisplayWithMeta : Model -> FileMetadata -> H.Html Msg
 fileDisplayWithMeta model meta =
     H.div []
-        ([ H.text "Got Metadata"
-         , H.br [] []
-         ]
-            ++ (if meta.isDir then
-                    [ dirListing model ]
-
-                else
-                    []
-               )
+        (flattenMaybeList
+            [ Just (crumbTrail meta)
+            , meta.isDir |> boolToMaybe (dirListing model)
+            ]
         )
+
+
+crumbTrail : FileMetadata -> H.Html Msg
+crumbTrail meta =
+    let
+        parts : List String
+        parts =
+            if String.length meta.path < 1 then
+                []
+
+            else
+                String.split "/" meta.path
+
+        pathUpTo : Int -> String -> String
+        pathUpTo i _ =
+            parts
+                |> List.take (i + 1)
+                |> String.join "/"
+    in
+    parts
+        |> List.indexedMap pathUpTo
+        |> List.map crumb
+        |> List.append [ I.home [ I.onClick (CrumbClicked "") ] ]
+        |> List.intersperse (H.text "/")
+        |> W.Container.view [ W.Container.horizontal, W.Container.inline, W.Container.gap_2 ]
+
+
+crumb : String -> H.Html Msg
+crumb path =
+    let
+        name : String
+        name =
+            path |> String.split "/" |> List.reverse |> List.head |> Maybe.withDefault "?"
+    in
+    H.span
+        [ E.onClick (CrumbClicked path)
+        , A.style "cursor" "pointer"
+        , A.style "text-decoration" "underline"
+        ]
+        [ H.text name ]
 
 
 dirListing : Model -> H.Html Msg
