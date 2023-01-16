@@ -3,7 +3,7 @@ module Pages.Home_ exposing (Model, Msg, page)
 import Browser.Navigation as Nav
 import Html as H
 import Http
-import Icons
+import Icons as I
 import Model exposing (FileChildren, FileMetadata, fileChildrenDecoder, fileMetadataDecoder)
 import Page
 import RemoteData exposing (WebData)
@@ -202,7 +202,7 @@ dirListingTable children =
 fileTypeIcon : FileMetadata -> H.Html Msg
 fileTypeIcon meta =
     if meta.isDir then
-        Icons.folder
+        I.folder []
 
     else
         H.text ""
@@ -214,10 +214,10 @@ fileDownloadIcon meta =
         H.text ""
 
     else if meta.mayRead then
-        W.Button.view [ W.Button.icon ] { label = [ Icons.download ], onClick = DownloadClicked meta }
+        W.Button.view [ W.Button.icon ] { label = [ I.download [] ], onClick = DownloadClicked meta }
 
     else
-        Icons.downloadOff
+        I.downloadOff []
 
 
 dirListingLoading : H.Html msg
