@@ -1,7 +1,8 @@
 module Model exposing (FileChildren, FileMetadata, UserInfo, fileChildrenDecoder, fileMetadataDecoder, userInfoDecoder)
 
-import Json.Decode as Decode exposing (Decoder, bool, list, maybe, string)
+import Json.Decode as Decode exposing (Decoder, bool, int, list, map, maybe, string)
 import Json.Decode.Pipeline exposing (optional, required)
+import Time
 
 
 
@@ -32,6 +33,8 @@ type alias FileMetadata =
     , isDir : Bool
     , mayRead : Bool
     , mayWrite : Bool
+    , modified : Maybe Time.Posix
+    , sizeBytes : Maybe Int
     }
 
 
@@ -44,6 +47,8 @@ fileMetadataDecoder =
         |> required "is_dir" bool
         |> required "may_read" bool
         |> required "may_write" bool
+        |> optional "modified" (maybe posix) Nothing
+        |> optional "size_bytes" (maybe int) Nothing
 
 
 type alias FileChildren =
@@ -54,3 +59,12 @@ fileChildrenDecoder : Decoder FileChildren
 fileChildrenDecoder =
     Decode.succeed FileChildren
         |> required "children" (list fileMetadataDecoder)
+
+
+
+-- More Decoders
+
+
+posix : Decoder Time.Posix
+posix =
+    map Time.millisToPosix Decode.int

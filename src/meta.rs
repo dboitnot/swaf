@@ -2,6 +2,7 @@ use log::warn;
 use rocket::serde::{Deserialize, Serialize};
 use std::io::Error;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(crate = "rocket::serde")]
@@ -12,6 +13,8 @@ pub struct FileMetadata {
     pub is_dir: bool,
     pub may_read: bool,
     pub may_write: bool,
+    pub modified: Option<u128>,
+    pub size_bytes: Option<u64>,
 }
 
 pub trait MetadataAuthorizor {
@@ -41,6 +44,13 @@ where
         is_dir,
         may_read: authorizor.may_read_file(logical_path.to_path_buf()),
         may_write: authorizor.may_write_file(logical_path.to_path_buf()),
+        modified: real_path
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis()),
+        size_bytes: real_path.metadata().ok().map(|m| m.len()),
     })
 }
 

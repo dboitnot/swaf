@@ -1,6 +1,7 @@
 module Pages.Home_ exposing (Model, Msg, page)
 
 import Browser.Navigation as Nav
+import DateFormat
 import Html as H
 import Html.Attributes as A
 import Html.Events as E
@@ -11,7 +12,9 @@ import Page
 import RemoteData exposing (WebData)
 import Request exposing (Request)
 import Shared exposing (User)
-import Util exposing (boolToMaybe, flattenMaybeList)
+import Task
+import Time
+import Util exposing (boolToMaybe, flattenMaybeList, formatFileSize)
 import View exposing (View)
 import W.Container
 import W.Styles
@@ -24,11 +27,16 @@ type Msg
     | CrumbClicked String
     | ChildClicked FileMetadata
     | DownloadClicked FileMetadata
+    | AdjustTimeZone Time.Zone
+    | Tick Time.Posix
+    | NoOp
 
 
 type alias Model =
     { metadata : WebData FileMetadata
     , children : WebData FileChildren
+    , timeZone : Time.Zone
+    , time : Time.Posix
     }
 
 
@@ -46,8 +54,16 @@ page sharedModel _ =
 
 init : Shared.Model -> ( Model, Cmd Msg )
 init sharedModel =
-    ( { metadata = RemoteData.NotAsked, children = RemoteData.NotAsked }
-    , getMetadata sharedModel ""
+    ( { metadata = RemoteData.NotAsked
+      , children = RemoteData.NotAsked
+      , timeZone = Time.utc
+      , time = Time.millisToPosix 0
+      }
+    , Cmd.batch
+        [ getMetadata sharedModel ""
+        , Task.perform AdjustTimeZone Time.here
+        , Task.perform Tick Time.now
+        ]
     )
 
 
@@ -58,6 +74,15 @@ init sharedModel =
 update : Shared.Model -> Msg -> Model -> ( Model, Cmd Msg )
 update sharedModel msg model =
     case msg of
+        NoOp ->
+            ( model, Cmd.none )
+
+        AdjustTimeZone newZone ->
+            ( { model | timeZone = newZone }, Cmd.none )
+
+        Tick newTime ->
+            ( { model | time = newTime }, Cmd.none )
+
         GotMetadata meta ->
             ( { model | metadata = meta }, updateMetaCmd sharedModel meta )
 
@@ -229,19 +254,48 @@ dirListing : Model -> H.Html Msg
 dirListing model =
     case model.children of
         RemoteData.Success children ->
-            dirListingTable children
+            dirListingTable model children
 
         _ ->
             dirListingLoading
 
 
-dirListingTable : FileChildren -> H.Html Msg
-dirListingTable children =
-    W.Table.view []
+dirListingTable : Model -> FileChildren -> H.Html Msg
+dirListingTable model children =
+    W.Table.view
+        [ W.Table.onClick (\_ -> NoOp)
+        , W.Table.htmlAttrs [ A.style "font-family" "monospace" ]
+        ]
         [ W.Table.column [ W.Table.alignCenter, W.Table.width 20 ] { label = "", content = fileTypeIcon }
         , W.Table.column [] { label = "Name", content = fileNameCell }
+        , W.Table.string [ W.Table.width 100 ] { label = "Modified", value = fileDate model }
+        , W.Table.string [ W.Table.width 100 ] { label = "Size", value = fileSize }
         ]
         children.children
+
+
+fileSize : FileMetadata -> String
+fileSize meta =
+    meta.sizeBytes |> Maybe.map formatFileSize |> Maybe.withDefault ""
+
+
+fileDate : Model -> FileMetadata -> String
+fileDate model meta =
+    case meta.modified of
+        Nothing ->
+            ""
+
+        Just time ->
+            let
+                fmt : String
+                fmt =
+                    if Time.toYear model.timeZone time == Time.toYear model.timeZone model.time then
+                        "MMM dd HH:mm"
+
+                    else
+                        "MMM dd  yyyy"
+            in
+            DateFormat.format fmt model.timeZone time
 
 
 fileNameCell : FileMetadata -> H.Html Msg
@@ -285,4 +339,4 @@ dirListingLoading =
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    Sub.none
+    Time.every 60000 Tick

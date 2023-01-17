@@ -1,4 +1,6 @@
-module Util exposing (boolToMaybe, flattenMaybeList, maybeEmptyString)
+module Util exposing (boolToMaybe, flattenMaybeList, formatFileSize, maybeEmptyString)
+
+import Round
 
 
 flattenMaybeList : List (Maybe a) -> List a
@@ -24,3 +26,24 @@ boolToMaybe trueValue b =
 
     else
         Nothing
+
+
+formatFileSize : Int -> String
+formatFileSize bytes =
+    let
+        floatBytes : Float
+        floatBytes =
+            toFloat bytes
+    in
+    [ { n = 1024.0, suffix = "K" }
+    , { n = 1048576.0, suffix = "M" }
+    , { n = 1073741824.0, suffix = "G" }
+    , { n = 1099511627776.0, suffix = "T" }
+    , { n = 1125899906842624.0, suffix = "P" }
+    ]
+        |> List.filter (\i -> i.n < floatBytes)
+        |> List.reverse
+        |> List.head
+        |> Maybe.map (\i -> { i | n = floatBytes / i.n })
+        |> Maybe.map (\i -> Round.round 1 i.n ++ i.suffix)
+        |> Maybe.withDefault (String.fromInt bytes)
