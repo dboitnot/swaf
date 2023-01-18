@@ -1,4 +1,4 @@
-module Pages.Home_ exposing (ChildrenSortOn, Model, Msg, page)
+module Pages.Home_ exposing (Child, Children, ChildrenSortOn, Model, Msg, page)
 
 import Browser.Navigation as Nav
 import DateFormat
@@ -17,6 +17,7 @@ import Time
 import Util exposing (boolToMaybe, flattenMaybeList, formatFileSize)
 import View exposing (View)
 import W.Container
+import W.InputCheckbox
 import W.Styles
 import W.Table
 
@@ -25,7 +26,8 @@ type Msg
     = GotMetadata (WebData FileMetadata)
     | GotChildren (WebData FileChildren)
     | CrumbClicked String
-    | ChildClicked FileMetadata
+    | ChildClicked Child
+    | ChildSelectionChanged Child Bool
     | DownloadClicked FileMetadata
     | UploadClicked
     | MkdirClicked
@@ -39,9 +41,19 @@ type ChildrenSortOn
     | Type
 
 
+type alias Child =
+    { metadata : FileMetadata
+    , selected : Bool
+    }
+
+
+type alias Children =
+    { children : List Child }
+
+
 type alias Model =
     { metadata : WebData FileMetadata
-    , children : WebData FileChildren
+    , children : WebData Children
     , timeZone : Time.Zone
     , time : Time.Posix
     , sortChildrenOn : ChildrenSortOn
@@ -96,7 +108,9 @@ update sharedModel msg model =
             ( { model | metadata = meta }, updateMetaCmd sharedModel meta )
 
         GotChildren children ->
-            ( { model | children = sortChildren model children }, Cmd.none )
+            ( { model | children = children |> wrapChildren |> sortChildren model }
+            , Cmd.none
+            )
 
         CrumbClicked path ->
             ( { model
@@ -106,17 +120,27 @@ update sharedModel msg model =
             , getMetadata sharedModel path
             )
 
-        ChildClicked childMeta ->
+        ChildClicked child ->
             let
                 meta : WebData FileMetadata
                 meta =
-                    RemoteData.Success childMeta
+                    RemoteData.Success child.metadata
             in
             ( { model
                 | metadata = meta
                 , children = RemoteData.NotAsked
               }
             , updateMetaCmd sharedModel meta
+            )
+
+        ChildSelectionChanged child selected ->
+            ( { model
+                | children =
+                    RemoteData.map
+                        (\cc -> { cc | children = updateChildSelection child selected cc.children })
+                        model.children
+              }
+            , Cmd.none
             )
 
         DownloadClicked meta ->
@@ -129,34 +153,63 @@ update sharedModel msg model =
             ( model, Cmd.none )
 
 
-sortChildren : Model -> WebData FileChildren -> WebData FileChildren
+updateChildSelection : Child -> Bool -> List Child -> List Child
+updateChildSelection child selected children =
+    List.map
+        (\c ->
+            if c.metadata.path == child.metadata.path then
+                { c | selected = selected }
+
+            else
+                c
+        )
+        children
+
+
+wrapChildren : WebData FileChildren -> WebData Children
+wrapChildren data =
+    RemoteData.map
+        (\children ->
+            { children = List.map (\c -> { metadata = c, selected = False }) children.children
+            }
+        )
+        data
+
+
+sortChildren : Model -> WebData Children -> WebData Children
 sortChildren model data =
-    case data of
-        RemoteData.Success children ->
-            RemoteData.Success { children | children = childSorter model children.children }
+    RemoteData.map
+        (\children ->
+            { children | children = childSorter model children.children }
+        )
+        data
 
-        _ ->
-            data
 
-
-childSorter : Model -> (List FileMetadata -> List FileMetadata)
+childSorter : Model -> (List Child -> List Child)
 childSorter model =
-    case model.sortChildrenOn of
-        Name ->
-            List.sortBy fileNameOf
+    let
+        sortBy : (FileMetadata -> comparable) -> (FileMetadata -> FileMetadata -> Order)
+        sortBy fn =
+            \a b -> compare (fn a) (fn b)
 
-        Type ->
-            List.sortWith
-                (\a b ->
-                    if a.isDir && b.isDir then
-                        LT
+        cmp : FileMetadata -> FileMetadata -> Order
+        cmp =
+            case model.sortChildrenOn of
+                Name ->
+                    sortBy fileNameOf
 
-                    else if not a.isDir && b.isDir then
-                        GT
+                Type ->
+                    \a b ->
+                        if a.isDir && b.isDir then
+                            LT
 
-                    else
-                        compare (fileNameOf a) (fileNameOf b)
-                )
+                        else if not a.isDir && b.isDir then
+                            GT
+
+                        else
+                            compare (fileNameOf a) (fileNameOf b)
+    in
+    List.sortWith (\a b -> cmp a.metadata b.metadata)
 
 
 updateMetaCmd : Shared.Model -> WebData FileMetadata -> Cmd Msg
@@ -348,28 +401,38 @@ dirListing model =
             dirListingLoading
 
 
-dirListingTable : Model -> FileChildren -> H.Html Msg
+dirListingTable : Model -> Children -> H.Html Msg
 dirListingTable model children =
     W.Table.view
         [ W.Table.onClick (\_ -> NoOp)
         , W.Table.htmlAttrs [ A.style "font-family" "monospace" ]
         ]
-        [ W.Table.column [ W.Table.alignCenter, W.Table.width 20 ] { label = "", content = fileTypeIcon }
+        [ W.Table.column [ W.Table.width 20 ] { label = "", content = childCheckBox }
+        , W.Table.column [ W.Table.alignCenter, W.Table.width 20 ] { label = "", content = fileTypeIcon }
         , W.Table.column [] { label = "Name", content = fileNameCell }
         , W.Table.string [ W.Table.width 100 ] { label = "Modified", value = fileDate model }
         , W.Table.string [ W.Table.width 100 ] { label = "Size", value = fileSize }
+        , W.Table.column [ W.Table.width 50 ] { label = "", content = childToolbar }
         ]
         children.children
 
 
-fileSize : FileMetadata -> String
-fileSize meta =
-    meta.sizeBytes |> Maybe.map formatFileSize |> Maybe.withDefault ""
+childCheckBox : Child -> H.Html Msg
+childCheckBox child =
+    W.InputCheckbox.view []
+        { value = child.selected
+        , onInput = ChildSelectionChanged child
+        }
 
 
-fileDate : Model -> FileMetadata -> String
-fileDate model meta =
-    case meta.modified of
+fileSize : Child -> String
+fileSize child =
+    child.metadata.sizeBytes |> Maybe.map formatFileSize |> Maybe.withDefault ""
+
+
+fileDate : Model -> Child -> String
+fileDate model child =
+    case child.metadata.modified of
         Nothing ->
             ""
 
@@ -386,22 +449,27 @@ fileDate model meta =
             DateFormat.format fmt model.timeZone time
 
 
-fileNameCell : FileMetadata -> H.Html Msg
-fileNameCell meta =
+fileNameCell : Child -> H.Html Msg
+fileNameCell child =
     H.span
-        [ E.onClick (ChildClicked meta)
+        [ E.onClick (ChildClicked child)
         , A.style "cursor" "pointer"
         ]
-        [ H.text (fileNameOf meta) ]
+        [ H.text (fileNameOf child.metadata) ]
 
 
-fileTypeIcon : FileMetadata -> H.Html Msg
-fileTypeIcon meta =
-    if meta.isDir then
-        I.folder [ I.onClick (ChildClicked meta) ]
+fileTypeIcon : Child -> H.Html Msg
+fileTypeIcon child =
+    if child.metadata.isDir then
+        I.folder [ I.onClick (ChildClicked child) ]
 
     else
-        fileDownloadIcon meta
+        H.text ""
+
+
+childToolbar : Child -> H.Html Msg
+childToolbar child =
+    W.Container.view [] [ fileDownloadIcon child.metadata ]
 
 
 fileDownloadIcon : FileMetadata -> H.Html Msg
