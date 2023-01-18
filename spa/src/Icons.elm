@@ -1,5 +1,7 @@
 module Icons exposing
     ( Attribute
+    , Icon
+    , createNewFolder
     , download
     , downloadOff
     , filled
@@ -10,6 +12,8 @@ module Icons exposing
     , onClick
     , opticalSize
     , size
+    , tooltip
+    , tooltipText
     , upload
     , uploadOff
     , weight
@@ -19,6 +23,7 @@ import Html as H
 import Html.Attributes as A
 import Html.Events as HE
 import Util exposing (boolToMaybe, flattenMaybeList, maybeEmptyString)
+import W.Tooltip
 
 
 type Attribute msg
@@ -32,6 +37,7 @@ type alias Attributes msg =
     , opticalSize : Maybe Int
     , size : Maybe String
     , onClick : Maybe msg
+    , tooltip : Maybe (List (H.Html msg))
     }
 
 
@@ -43,6 +49,7 @@ defaultAttrs =
     , opticalSize = Nothing
     , size = Nothing
     , onClick = Nothing
+    , tooltip = Nothing
     }
 
 
@@ -85,25 +92,51 @@ onClick v =
     Attribute <| \attrs -> { attrs | onClick = Just v }
 
 
+tooltip : List (H.Html msg) -> Attribute msg
+tooltip tt =
+    Attribute <| \attrs -> { attrs | tooltip = Just tt }
+
+
+tooltipText : String -> Attribute msg
+tooltipText txt =
+    tooltip [ H.text txt ]
+
+
 
 -- ICONS
 
 
-icon : String -> List (Attribute msg) -> H.Html msg
+type alias Icon msg =
+    List (Attribute msg) -> H.Html msg
+
+
+icon : String -> Icon msg
 icon name attrList =
     let
         attrs : Attributes msg
         attrs =
             applyAttrs attrList
+
+        span : H.Html msg
+        span =
+            H.span
+                (flattenMaybeList
+                    [ Just (A.class "material-symbols-outlined")
+                    , style attrs
+                    , attrs.onClick |> Maybe.map HE.onClick
+                    ]
+                )
+                [ H.text name ]
     in
-    H.span
-        (flattenMaybeList
-            [ Just (A.class "material-symbols-outlined")
-            , style attrs
-            , attrs.onClick |> Maybe.map HE.onClick
-            ]
-        )
-        [ H.text name ]
+    case attrs.tooltip of
+        Nothing ->
+            span
+
+        Just tt ->
+            W.Tooltip.view [ W.Tooltip.fast ]
+                { tooltip = tt
+                , children = [ span ]
+                }
 
 
 style : Attributes msg -> Maybe (H.Attribute msg)
@@ -135,31 +168,40 @@ fontVariationPart attrs key part =
         |> Maybe.map (\v -> "'" ++ part ++ "' " ++ v)
 
 
-folder : List (Attribute msg) -> H.Html msg
+
+-- Icon Constants
+
+
+folder : Icon msg
 folder =
     icon "folder"
 
 
-download : List (Attribute msg) -> H.Html msg
+download : Icon msg
 download =
     icon "download"
 
 
-downloadOff : List (Attribute msg) -> H.Html msg
+downloadOff : Icon msg
 downloadOff =
     icon "file_download_off"
 
 
-home : List (Attribute msg) -> H.Html msg
+home : Icon msg
 home =
     icon "home"
 
 
-upload : List (Attribute msg) -> H.Html msg
+upload : Icon msg
 upload =
     icon "upload"
 
 
-uploadOff : List (Attribute msg) -> H.Html msg
+uploadOff : Icon msg
 uploadOff =
     icon "file_upload_off"
+
+
+createNewFolder : Icon msg
+createNewFolder =
+    icon "create_new_folder"

@@ -1,4 +1,4 @@
-module Pages.Home_ exposing (Model, Msg, page)
+module Pages.Home_ exposing (ChildrenSortOn, Model, Msg, page)
 
 import Browser.Navigation as Nav
 import DateFormat
@@ -27,9 +27,16 @@ type Msg
     | CrumbClicked String
     | ChildClicked FileMetadata
     | DownloadClicked FileMetadata
+    | UploadClicked
+    | MkdirClicked
     | AdjustTimeZone Time.Zone
     | Tick Time.Posix
     | NoOp
+
+
+type ChildrenSortOn
+    = Name
+    | Type
 
 
 type alias Model =
@@ -37,6 +44,7 @@ type alias Model =
     , children : WebData FileChildren
     , timeZone : Time.Zone
     , time : Time.Posix
+    , sortChildrenOn : ChildrenSortOn
     }
 
 
@@ -58,6 +66,7 @@ init sharedModel =
       , children = RemoteData.NotAsked
       , timeZone = Time.utc
       , time = Time.millisToPosix 0
+      , sortChildrenOn = Type
       }
     , Cmd.batch
         [ getMetadata sharedModel ""
@@ -87,7 +96,7 @@ update sharedModel msg model =
             ( { model | metadata = meta }, updateMetaCmd sharedModel meta )
 
         GotChildren children ->
-            ( { model | children = children }, Cmd.none )
+            ( { model | children = sortChildren model children }, Cmd.none )
 
         CrumbClicked path ->
             ( { model
@@ -112,6 +121,42 @@ update sharedModel msg model =
 
         DownloadClicked meta ->
             ( model, Nav.load (sharedModel.baseUrl ++ "/api/file/" ++ meta.path) )
+
+        UploadClicked ->
+            ( model, Cmd.none )
+
+        MkdirClicked ->
+            ( model, Cmd.none )
+
+
+sortChildren : Model -> WebData FileChildren -> WebData FileChildren
+sortChildren model data =
+    case data of
+        RemoteData.Success children ->
+            RemoteData.Success { children | children = childSorter model children.children }
+
+        _ ->
+            data
+
+
+childSorter : Model -> (List FileMetadata -> List FileMetadata)
+childSorter model =
+    case model.sortChildrenOn of
+        Name ->
+            List.sortBy fileNameOf
+
+        Type ->
+            List.sortWith
+                (\a b ->
+                    if a.isDir && b.isDir then
+                        LT
+
+                    else if not a.isDir && b.isDir then
+                        GT
+
+                    else
+                        compare (fileNameOf a) (fileNameOf b)
+                )
 
 
 updateMetaCmd : Shared.Model -> WebData FileMetadata -> Cmd Msg
@@ -202,12 +247,23 @@ fileDisplay model =
 
 fileDisplayWithMeta : Model -> FileMetadata -> H.Html Msg
 fileDisplayWithMeta model meta =
-    H.div []
+    W.Container.view []
         (flattenMaybeList
-            [ Just (crumbTrail meta)
+            [ Just (fileListHeader meta)
             , meta.isDir |> boolToMaybe (dirListing model)
             ]
         )
+
+
+fileListHeader : FileMetadata -> H.Html Msg
+fileListHeader meta =
+    W.Container.view
+        [ W.Container.gap_2
+        , W.Container.largeScreen [ W.Container.spaceBetween, W.Container.horizontal ]
+        ]
+        [ crumbTrail meta
+        , fileToolbar meta
+        ]
 
 
 crumbTrail : FileMetadata -> H.Html Msg
@@ -248,6 +304,38 @@ crumb path =
         , A.style "text-decoration" "underline"
         ]
         [ H.text name ]
+
+
+fileToolbar : FileMetadata -> H.Html Msg
+fileToolbar meta =
+    let
+        props : String -> Msg -> String -> List (I.Attribute Msg)
+        props allowedTooltip msg deniedTooltip =
+            [ I.tooltipText
+                (if meta.mayWrite then
+                    allowedTooltip
+
+                 else
+                    deniedTooltip
+                )
+            , I.onClick
+                (if meta.mayWrite then
+                    msg
+
+                 else
+                    NoOp
+                )
+            ]
+    in
+    W.Container.view [ W.Container.horizontal, W.Container.gap_4 ]
+        (if meta.isDir then
+            [ I.upload (props "Upload a file" UploadClicked "You are not permitted to upload here.")
+            , I.createNewFolder (props "Create a new folder" MkdirClicked "You are not permitted to create a folder here.")
+            ]
+
+         else
+            []
+        )
 
 
 dirListing : Model -> H.Html Msg
@@ -304,7 +392,7 @@ fileNameCell meta =
         [ E.onClick (ChildClicked meta)
         , A.style "cursor" "pointer"
         ]
-        [ H.text (Maybe.withDefault "?" meta.fileName) ]
+        [ H.text (fileNameOf meta) ]
 
 
 fileTypeIcon : FileMetadata -> H.Html Msg
@@ -322,10 +410,10 @@ fileDownloadIcon meta =
         H.text ""
 
     else if meta.mayRead then
-        I.download [ I.onClick (DownloadClicked meta) ]
+        I.download [ I.onClick (DownloadClicked meta), I.tooltipText "Download this file" ]
 
     else
-        I.downloadOff []
+        I.downloadOff [ I.tooltipText "You are not permitted to download this file." ]
 
 
 dirListingLoading : H.Html msg
@@ -340,3 +428,12 @@ dirListingLoading =
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     Time.every 60000 Tick
+
+
+
+-- Utilities
+
+
+fileNameOf : FileMetadata -> String
+fileNameOf meta =
+    Maybe.withDefault "?" meta.fileName
