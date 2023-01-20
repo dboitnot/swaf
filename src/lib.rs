@@ -3,7 +3,6 @@ use auth::session::{Session, SessionCookie};
 use auth::{FileChildren, RequestedFileDataWritable, RequestedRegularFileDataReadable};
 use config::Config;
 use meta::FileMetadata;
-use rocket::form::{Form, FromForm};
 use rocket::fs::NamedFile;
 use rocket::fs::TempFile;
 use rocket::http::{Cookie, CookieJar, Status};
@@ -72,19 +71,12 @@ async fn get_file_data(file: RequestedRegularFileDataReadable) -> Result<NamedFi
         })
 }
 
-#[derive(FromForm)]
-struct Upload<'r> {
-    file: TempFile<'r>,
-}
-
-#[put("/file/<_..>", data = "<upload>")]
+#[put("/file/<_..>", data = "<file>")]
 async fn upload(
     path: RequestedFileDataWritable,
-    mut upload: Form<Upload<'_>>,
+    mut file: TempFile<'_>,
 ) -> Result<&'static str, ()> {
-    upload
-        .file
-        .move_copy_to(path.real_path)
+    file.move_copy_to(path.real_path)
         .await
         .map_err(|_| ())
         .map(|_| "Ok")
@@ -121,7 +113,7 @@ pub fn launch() -> Rocket<Build> {
                 get_file_data,
                 get_file_meta,
                 get_file_children,
-                upload
+                upload,
             ],
         )
         .mount("/", routes![spa_files])

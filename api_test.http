@@ -20,3 +20,15 @@ GET :swaf/meta/subdir
 
 # Get directory listing
 GET :swaf/ls/
+
+# Upload small file
+PUT :swaf/file/test_again.txt
+Content-type: text/plain
+
+<repo/file_root/test.txt
+
+# Upload larger file
+PUT :swaf/file/screenshot.png
+Content-type: image/png
+
+<repo/screenshot1.png
