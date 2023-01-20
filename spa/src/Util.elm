@@ -1,5 +1,6 @@
-module Util exposing (boolToMaybe, flattenMaybeList, formatFileSize, maybeEmptyString)
+module Util exposing (boolToMaybe, flattenMaybeList, formatFileSize, httpErrorToString, maybeEmptyString)
 
+import Http
 import Round
 
 
@@ -47,3 +48,22 @@ formatFileSize bytes =
         |> Maybe.map (\i -> { i | n = floatBytes / i.n })
         |> Maybe.map (\i -> Round.round 1 i.n ++ i.suffix)
         |> Maybe.withDefault (String.fromInt bytes)
+
+
+httpErrorToString : Http.Error -> String
+httpErrorToString error =
+    case error of
+        Http.BadUrl s ->
+            "Bad URL: " ++ s
+
+        Http.Timeout ->
+            "Timeout"
+
+        Http.NetworkError ->
+            "Network Error"
+
+        Http.BadStatus i ->
+            "Server returned status " ++ String.fromInt i
+
+        Http.BadBody s ->
+            "Error parsing server response: " ++ s

@@ -1,4 +1,4 @@
-module Pages.Home_ exposing (Child, Children, ChildrenSortOn, Model, Msg, page)
+module Pages.Home_ exposing (Child, Children, ChildrenSortOn, Model, Msg, UploadStatus, page)
 
 import Browser.Navigation as Nav
 import DateFormat
@@ -13,13 +13,16 @@ import Model exposing (FileChildren, FileMetadata, fileChildrenDecoder, fileMeta
 import Page
 import RemoteData exposing (WebData)
 import Request exposing (Request)
+import Round
 import Shared exposing (User)
 import Task
 import Time
-import Util exposing (boolToMaybe, flattenMaybeList, formatFileSize)
+import Util exposing (boolToMaybe, flattenMaybeList, formatFileSize, httpErrorToString)
 import View exposing (View)
+import W.Button
 import W.Container
 import W.InputCheckbox
+import W.Modal
 import W.Styles
 import W.Table
 
@@ -33,7 +36,10 @@ type Msg
     | DownloadClicked FileMetadata
     | UploadClicked
     | UploadSelected File
+    | UploadProgress Http.Progress
+    | UploadCancelled
     | UploadFinished (Result Http.Error ())
+    | UploadAcknowledged
     | MkdirClicked
     | AdjustTimeZone Time.Zone
     | Tick Time.Posix
@@ -43,6 +49,12 @@ type Msg
 type ChildrenSortOn
     = Name
     | Type
+
+
+type UploadStatus
+    = NotUploading
+    | Uploading String
+    | UploadComplete String (Result Http.Error ())
 
 
 type alias Child =
@@ -61,6 +73,8 @@ type alias Model =
     , timeZone : Time.Zone
     , time : Time.Posix
     , sortChildrenOn : ChildrenSortOn
+    , uploadStatus : UploadStatus
+    , uploadProgress : Maybe Http.Progress
     }
 
 
@@ -83,6 +97,8 @@ init sharedModel =
       , timeZone = Time.utc
       , time = Time.millisToPosix 0
       , sortChildrenOn = Type
+      , uploadStatus = NotUploading
+      , uploadProgress = Nothing
       }
     , Cmd.batch
         [ getMetadata sharedModel ""
@@ -154,10 +170,32 @@ update sharedModel msg model =
             ( model, Select.file [ "*/*" ] UploadSelected )
 
         UploadSelected file ->
-            ( model, upload sharedModel model file )
+            upload sharedModel model file
+
+        UploadProgress progress ->
+            ( { model | uploadProgress = Just progress }, Cmd.none )
+
+        UploadCancelled ->
+            ( { model | uploadStatus = NotUploading, uploadProgress = Nothing }
+            , case model.uploadStatus of
+                Uploading fileName ->
+                    Http.cancel fileName
+
+                _ ->
+                    Cmd.none
+            )
 
         UploadFinished res ->
-            ( model, Cmd.none )
+            case model.uploadStatus of
+                Uploading fileName ->
+                    ( { model | uploadStatus = UploadComplete fileName res, uploadProgress = Nothing }, Cmd.none )
+
+                -- This shouldn't happen
+                _ ->
+                    ( { model | uploadStatus = NotUploading, uploadProgress = Nothing }, Cmd.none )
+
+        UploadAcknowledged ->
+            ( { model | uploadStatus = NotUploading, uploadProgress = Nothing }, Cmd.none )
 
         MkdirClicked ->
             ( model, Cmd.none )
@@ -256,23 +294,30 @@ getChildren sharedModel dirPath =
         }
 
 
-upload : Shared.Model -> Model -> File -> Cmd Msg
+upload : Shared.Model -> Model -> File -> ( Model, Cmd Msg )
 upload sharedModel model file =
     case model.metadata of
         RemoteData.Success meta ->
-            Http.request
+            let
+                fileName : String
+                fileName =
+                    File.name file
+            in
+            ( { model | uploadStatus = Uploading fileName }
+            , Http.request
                 { method = "PUT"
                 , headers = []
-                , url = sharedModel.baseUrl ++ "/api/file" ++ meta.path ++ "/" ++ File.name file
+                , url = sharedModel.baseUrl ++ "/api/file" ++ meta.path ++ "/" ++ fileName
                 , body = Http.fileBody file
                 , expect = Http.expectWhatever UploadFinished
                 , timeout = Nothing
-                , tracker = Nothing
+                , tracker = Just fileName
                 }
+            )
 
         -- This shouldn't happen.
         _ ->
-            Cmd.none
+            ( model, Cmd.none )
 
 
 
@@ -284,14 +329,19 @@ view user model =
     { title = "Hi there"
     , body =
         [ H.div []
-            [ W.Styles.globalStyles
-            , W.Styles.baseTheme
-            , W.Container.view
-                [ W.Container.alignCenterX ]
-                [ menuBar user model
-                , fileDisplay model
+            (flattenMaybeList
+                [ Just W.Styles.globalStyles
+                , Just W.Styles.baseTheme
+                , Just
+                    (W.Container.view
+                        [ W.Container.alignCenterX ]
+                        [ menuBar user model
+                        , fileDisplay model
+                        ]
+                    )
+                , uploadModal model
                 ]
-            ]
+            )
         ]
     }
 
@@ -518,13 +568,91 @@ dirListingLoading =
     H.text "Dir Listing Loading"
 
 
+uploadModal : Model -> Maybe (H.Html Msg)
+uploadModal model =
+    case model.uploadStatus of
+        NotUploading ->
+            Nothing
+
+        Uploading fileName ->
+            Just (uploadModalActive fileName Nothing model.uploadProgress)
+
+        UploadComplete fileName res ->
+            Just (uploadModalActive fileName (Just res) Nothing)
+
+
+uploadModalActive : String -> Maybe (Result Http.Error ()) -> Maybe Http.Progress -> H.Html Msg
+uploadModalActive fileName res progress =
+    let
+        progressMsg : String
+        progressMsg =
+            case res of
+                Just (Ok _) ->
+                    "Done."
+
+                Just (Err _) ->
+                    "Error"
+
+                Nothing ->
+                    case progress of
+                        Just (Http.Sending p) ->
+                            Round.round 1 (Http.fractionSent p * 100.0)
+
+                        _ ->
+                            "..."
+
+        errorMsg : String
+        errorMsg =
+            case res of
+                Just (Err e) ->
+                    httpErrorToString e
+
+                _ ->
+                    ""
+    in
+    W.Modal.view []
+        { isOpen = True
+        , onClose = Nothing
+        , content =
+            [ W.Container.view [ W.Container.pad_2 ]
+                [ H.text ("Uploading " ++ fileName ++ ": " ++ progressMsg)
+                , H.text errorMsg
+                , uploadModalButton res
+                ]
+            ]
+        }
+
+
+uploadModalButton : Maybe (Result Http.Error ()) -> H.Html Msg
+uploadModalButton res =
+    case res of
+        Nothing ->
+            W.Button.view [] { label = [ H.text "Cancel" ], onClick = UploadCancelled }
+
+        Just (Ok _) ->
+            W.Button.view [ W.Button.success ] { label = [ H.text "Ok" ], onClick = UploadAcknowledged }
+
+        Just (Err _) ->
+            W.Button.view [ W.Button.warning ] { label = [ H.text "Ok" ], onClick = UploadAcknowledged }
+
+
 
 -- SUBSCRIPTIONS
 
 
 subscriptions : Model -> Sub Msg
-subscriptions _ =
-    Time.every 60000 Tick
+subscriptions model =
+    Sub.batch
+        (flattenMaybeList
+            [ Just (Time.every 60000 Tick)
+            , case model.uploadStatus of
+                Uploading tracker ->
+                    Just (Http.track tracker UploadProgress)
+
+                _ ->
+                    Nothing
+            ]
+        )
 
 
 
