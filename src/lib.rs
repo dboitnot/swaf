@@ -1,9 +1,11 @@
+use auth::policy::User;
 use auth::session::{Session, SessionCookie};
-use auth::FileChildren;
-use auth::{policy::User, RequestedRegularFileDataReadable};
+use auth::{FileChildren, RequestedFileDataWritable, RequestedRegularFileDataReadable};
 use config::Config;
 use meta::FileMetadata;
+use rocket::form::{Form, FromForm};
 use rocket::fs::NamedFile;
+use rocket::fs::TempFile;
 use rocket::http::{Cookie, CookieJar, Status};
 use rocket::serde::json;
 use rocket::serde::json::Json;
@@ -70,6 +72,24 @@ async fn get_file_data(file: RequestedRegularFileDataReadable) -> Result<NamedFi
         })
 }
 
+#[derive(FromForm)]
+struct Upload<'r> {
+    file: TempFile<'r>,
+}
+
+#[post("/file/<_..>", data = "<upload>")]
+async fn upload(
+    path: RequestedFileDataWritable,
+    mut upload: Form<Upload<'_>>,
+) -> Result<&'static str, ()> {
+    upload
+        .file
+        .move_copy_to(path.real_path)
+        .await
+        .map_err(|_| ())
+        .map(|_| "Ok")
+}
+
 #[get("/meta/<_..>")]
 async fn get_file_meta(meta: FileMetadata) -> Json<FileMetadata> {
     Json(meta)
@@ -100,7 +120,8 @@ pub fn launch() -> Rocket<Build> {
                 login,
                 get_file_data,
                 get_file_meta,
-                get_file_children
+                get_file_children,
+                upload
             ],
         )
         .mount("/", routes![spa_files])

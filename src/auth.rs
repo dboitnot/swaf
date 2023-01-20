@@ -62,6 +62,36 @@ impl<'r> FromRequest<'r> for RequestedFileDataReadable {
     }
 }
 
+pub struct RequestedFileDataWritable {
+    pub real_path: PathBuf,
+    pub logical_path: PathBuf,
+}
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for RequestedFileDataWritable {
+    type Error = &'static str;
+
+    async fn from_request(
+        request: &'r Request<'_>,
+    ) -> Outcome<RequestedFileDataWritable, &'static str> {
+        let file = try_outcome!(request.guard::<RequestedFile>().await);
+        let authorizor = try_outcome!(request
+            .guard::<RequestAuthorizor>()
+            .await
+            .map_failure(|(s, _)| (s, "No session authorizor")));
+        authorizor
+            .require("file:Write", &file.real_path) // TODO: I think this should be the logical_path
+            .ok()
+            .map(|_| {
+                Outcome::Success(RequestedFileDataWritable {
+                    real_path: file.real_path,
+                    logical_path: file.logical_path,
+                })
+            })
+            .unwrap_or_else(|e| Outcome::Failure((e, "Access Denied")))
+    }
+}
+
 pub struct RequestedRegularFileDataReadable {
     pub real_path: PathBuf,
 }
@@ -85,6 +115,35 @@ impl<'r> FromRequest<'r> for RequestedRegularFileDataReadable {
                     Outcome::Failure((
                         Status::NotFound,
                         "Requested path does not exist or is not a regular file.",
+                    ))
+                }
+            })
+    }
+}
+
+pub struct RequestedDirectoryWritable {
+    pub real_path: PathBuf,
+}
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for RequestedDirectoryWritable {
+    type Error = &'static str;
+
+    async fn from_request(
+        request: &'r Request<'_>,
+    ) -> Outcome<RequestedDirectoryWritable, &'static str> {
+        request
+            .guard::<RequestedFileDataWritable>()
+            .await
+            .and_then(|f| {
+                if f.real_path.is_file() {
+                    Outcome::Success(RequestedDirectoryWritable {
+                        real_path: f.real_path,
+                    })
+                } else {
+                    Outcome::Failure((
+                        Status::NotFound,
+                        "Requested path does not exist or is not a directory.",
                     ))
                 }
             })

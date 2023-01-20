@@ -33,15 +33,15 @@ impl<'r> FromRequest<'r> for RequestedFile {
             Ok(path) => path,
             Err(_) => return Outcome::Failure((Status::BadRequest, "Invalid path")),
         };
-        realize(&config.file_root, &req_path, false)
+        realize(&config.file_root, req_path, false)
             .map_err(|_| "Requested path did not realize")
             .into_outcome(Status::BadRequest)
     }
 }
 
-pub fn realize<P: AsRef<Path>>(
-    base_path: P,
-    req_path: P,
+pub fn realize<B: AsRef<Path>, R: AsRef<Path>>(
+    base_path: B,
+    req_path: R,
     must_exist: bool,
 ) -> Result<RequestedFile, RealizationError> {
     let base_path = base_path
