@@ -596,7 +596,15 @@ uploadModalActive fileName res progress =
                 Nothing ->
                     case progress of
                         Just (Http.Sending p) ->
-                            Round.round 1 (Http.fractionSent p * 100.0)
+                            formatFileSize p.sent
+                                ++ " / "
+                                ++ formatFileSize p.size
+                                ++ " ("
+                                ++ Round.round 1 (Http.fractionSent p * 100.0)
+                                ++ "%)"
+
+                        Just (Http.Receiving _) ->
+                            "Finishing..."
 
                         _ ->
                             "..."
@@ -614,7 +622,7 @@ uploadModalActive fileName res progress =
         { isOpen = True
         , onClose = Nothing
         , content =
-            [ W.Container.view [ W.Container.pad_2 ]
+            [ W.Container.view [ W.Container.vertical, W.Container.pad_2 ]
                 [ H.text ("Uploading " ++ fileName ++ ": " ++ progressMsg)
                 , H.text errorMsg
                 , uploadModalButton res
