@@ -77,7 +77,7 @@ struct Upload<'r> {
     file: TempFile<'r>,
 }
 
-#[post("/file/<_..>", data = "<upload>")]
+#[put("/file/<_..>", data = "<upload>")]
 async fn upload(
     path: RequestedFileDataWritable,
     mut upload: Form<Upload<'_>>,

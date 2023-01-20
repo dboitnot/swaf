@@ -2,6 +2,8 @@ module Pages.Home_ exposing (Child, Children, ChildrenSortOn, Model, Msg, page)
 
 import Browser.Navigation as Nav
 import DateFormat
+import File exposing (File)
+import File.Select as Select
 import Html as H
 import Html.Attributes as A
 import Html.Events as E
@@ -30,6 +32,8 @@ type Msg
     | ChildSelectionChanged Child Bool
     | DownloadClicked FileMetadata
     | UploadClicked
+    | UploadSelected File
+    | UploadFinished (Result Http.Error ())
     | MkdirClicked
     | AdjustTimeZone Time.Zone
     | Tick Time.Posix
@@ -147,6 +151,12 @@ update sharedModel msg model =
             ( model, Nav.load (sharedModel.baseUrl ++ "/api/file/" ++ meta.path) )
 
         UploadClicked ->
+            ( model, Select.file [ "*/*" ] UploadSelected )
+
+        UploadSelected file ->
+            ( model, upload sharedModel model file )
+
+        UploadFinished res ->
             ( model, Cmd.none )
 
         MkdirClicked ->
@@ -244,6 +254,25 @@ getChildren sharedModel dirPath =
         { url = sharedModel.baseUrl ++ "/api/ls/" ++ dirPath
         , expect = fileChildrenDecoder |> Http.expectJson (RemoteData.fromResult >> GotChildren)
         }
+
+
+upload : Shared.Model -> Model -> File -> Cmd Msg
+upload sharedModel model file =
+    case model.metadata of
+        RemoteData.Success meta ->
+            Http.request
+                { method = "PUT"
+                , headers = []
+                , url = sharedModel.baseUrl ++ "/api/file" ++ meta.path ++ "/" ++ File.name file
+                , body = Http.multipartBody [ Http.filePart "file" file ]
+                , expect = Http.expectWhatever UploadFinished
+                , timeout = Nothing
+                , tracker = Nothing
+                }
+
+        -- This shouldn't happen.
+        _ ->
+            Cmd.none
 
 
 
