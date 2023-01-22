@@ -1,8 +1,6 @@
-use crate::auth::{
-    policy::{Effect, PolicyStatement},
-    session::Session,
-    SessionPolicyStore,
-};
+use crate::auth::policy::{Effect, Group, PolicyStatement};
+use crate::auth::session::Session;
+use crate::auth::SessionPolicyStore;
 use crate::meta::MetadataAuthorizor;
 use futures::executor;
 use log::{info, warn};
@@ -23,15 +21,20 @@ impl<'r> FromRequest<'r> for RequestAuthorizor {
     async fn from_request(request: &'r Request<'_>) -> Outcome<RequestAuthorizor, ()> {
         let user = try_outcome!(request.guard::<Session>().await.map(|session| session.user));
         let policy_store = try_outcome!(executor::block_on(request.guard::<SessionPolicyStore>()));
-        let policy_statements: Vec<PolicyStatement> = user
+        let policy_statements: Vec<PolicyStatement> = user.policy_statements;
+        let groups = user
             .groups
             .iter()
             .map(|g| policy_store.group_named(g))
             .filter(|o| o.is_some())
-            .flat_map(|o| o.unwrap().policy_statements.iter())
-            .chain(user.policy_statements.iter())
+            .flatten()
+            .collect::<Vec<Group>>();
+        let policy_statements = groups
+            .iter()
+            .flat_map(|g| &g.policy_statements)
             .cloned()
-            .collect();
+            .chain(policy_statements)
+            .collect::<Vec<PolicyStatement>>();
         Outcome::Success(RequestAuthorizor {
             username: user.login_name,
             policy_statements,

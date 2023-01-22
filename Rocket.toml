@@ -1,2 +1,6 @@
 [global]
 limits = {file = "100MiB"}
+
+[debug]
+file_root = "repo/file_root"
+policy_store_root = "repo/policy"

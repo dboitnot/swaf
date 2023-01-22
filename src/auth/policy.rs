@@ -60,5 +60,6 @@ impl PolicyStatement {
 }
 
 pub trait PolicyStore {
-    fn group_named(&self, name: &str) -> Option<&Group>;
+    fn create_user(&self, user: &User) -> Result<(), ()>;
+    fn group_named(&self, name: &str) -> Option<Group>;
 }

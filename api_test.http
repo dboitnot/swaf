@@ -32,3 +32,14 @@ PUT :swaf/file/screenshot.png
 Content-type: image/png
 
 <repo/screenshot1.png
+
+
+# Create a user
+PUT :swaf/user
+Content-type: application/json
+{
+"login_name": "dan",
+"full_name": "Dan",
+"groups": [],
+"policy_statements":[]
+}

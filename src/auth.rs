@@ -1,9 +1,10 @@
 mod authorizor;
 pub mod policy;
 pub mod session;
+pub mod store;
 
 use crate::auth::authorizor::RequestAuthorizor;
-use crate::auth::policy::{Group, PolicyStore};
+use crate::auth::policy::{Group, PolicyStore, User};
 use crate::files::RequestedFile;
 use crate::meta::{file_children, metadata_for_file, FileMetadata};
 use rocket::http::Status;
@@ -18,7 +19,10 @@ pub type SessionPolicyStore = Box<dyn PolicyStore>;
 struct SessionPolicyStoreImpl;
 
 impl PolicyStore for SessionPolicyStoreImpl {
-    fn group_named(&self, _name: &str) -> Option<&Group> {
+    fn create_user(&self, _user: &User) -> Result<(), ()> {
+        Ok(())
+    }
+    fn group_named(&self, _name: &str) -> Option<Group> {
         None
     }
 }

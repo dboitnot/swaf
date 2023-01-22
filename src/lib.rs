@@ -1,5 +1,6 @@
-use auth::policy::User;
+use auth::policy::{PolicyStore, User};
 use auth::session::{Session, SessionCookie};
+use auth::store::files::FilePolicyStore;
 use auth::{FileChildren, RequestedFileDataWritable, RequestedRegularFileDataReadable};
 use config::Config;
 use meta::FileMetadata;
@@ -8,7 +9,8 @@ use rocket::fs::TempFile;
 use rocket::http::{Cookie, CookieJar, Status};
 use rocket::serde::json;
 use rocket::serde::json::Json;
-use rocket::{fairing::AdHoc, Build, Rocket};
+use rocket::State;
+use rocket::{Build, Rocket};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use util::now_as_secs;
@@ -30,6 +32,14 @@ fn health() -> &'static str {
 #[get("/user/current")]
 fn user_current(session: Session) -> Json<User> {
     Json(session.user)
+}
+
+// TODO: Should be able to load the PolicyStore trait from the guard.
+// TODO: Authorize
+#[put("/user", format = "application/json", data = "<user>")]
+fn user_create(policy_store: &State<FilePolicyStore>, user: Json<User>) -> Result<(), ()> {
+    let user = user.into_inner();
+    policy_store.create_user(&user)
 }
 
 fn add_session_cookie(cookies: &CookieJar) -> Result<(), Status> {
@@ -103,7 +113,15 @@ async fn spa_files(mut file: PathBuf) -> Option<NamedFile> {
 }
 
 pub fn launch() -> Rocket<Build> {
-    rocket::build()
+    let rocket = rocket::build();
+    let figment = rocket.figment();
+    let config: Config = figment.extract().expect("Error loading configuration.");
+    let policy_store =
+        FilePolicyStore::new(&config.policy_store_root).expect("Error loading policy store");
+
+    rocket
+        .manage(config)
+        .manage(policy_store)
         .mount(
             "/api",
             routes![
@@ -114,8 +132,8 @@ pub fn launch() -> Rocket<Build> {
                 get_file_meta,
                 get_file_children,
                 upload,
+                user_create
             ],
         )
         .mount("/", routes![spa_files])
-        .attach(AdHoc::config::<Config>())
 }
