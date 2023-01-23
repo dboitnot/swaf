@@ -120,6 +120,10 @@ impl PolicyStore for FilePolicyStore {
         Ok(user.into())
     }
 
+    fn user_named(&self, name: &str) -> Result<User, ()> {
+        self.load_user(name).map(User::from)
+    }
+
     fn group_named(&self, name: &str) -> Option<Group> {
         load(&self.group_dir, name)
             .map_err(|e| warn!("Error loading group '{}': {:?}", name, e))

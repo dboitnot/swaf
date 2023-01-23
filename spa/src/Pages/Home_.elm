@@ -334,7 +334,7 @@ view user model =
                 , Just W.Styles.baseTheme
                 , Just
                     (W.Container.view
-                        [ W.Container.alignCenterX ]
+                        [ W.Container.vertical, W.Container.alignCenterX ]
                         [ menuBar user model
                         , fileDisplay model
                         ]
@@ -348,7 +348,9 @@ view user model =
 
 menuBar : User -> Model -> H.Html msg
 menuBar user _ =
-    H.text (userDisplayName user)
+    W.Container.view [ W.Container.horizontal ]
+        [ H.text (userDisplayName user)
+        ]
 
 
 userDisplayName : User -> String
@@ -372,6 +374,9 @@ fileDisplay model =
 
         RemoteData.Success metadata ->
             fileDisplayWithMeta model metadata
+
+        RemoteData.Failure (Http.BadStatus 403) ->
+            H.text "You are not authorized to view this directory."
 
         RemoteData.Failure _ ->
             H.text "Something went wrong"

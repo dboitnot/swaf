@@ -51,5 +51,14 @@ Content-type: application/json
 "login_name": "dan",
 "full_name": "Danton",
 "groups": [],
-"policy_statements":[]
+"policy_statements":[{
+  "effect": "Allow",
+  "actions":["*"],
+  "resources":["*"]
+}]
 }
+
+# Set user password
+POST :swaf/user/dan/password
+Content-type: text/plain
+thisismypassword

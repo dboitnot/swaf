@@ -64,5 +64,6 @@ pub trait PolicyStore {
     fn update_user(&self, user: &User) -> Result<(), ()>;
     fn set_user_password(&self, login_name: &str, password: Option<&str>) -> Result<(), ()>;
     fn authenticate_user(&self, login_name: &str, password: &str) -> Result<User, ()>;
+    fn user_named(&self, name: &str) -> Result<User, ()>;
     fn group_named(&self, name: &str) -> Option<Group>;
 }
