@@ -1,4 +1,4 @@
-mod authorizor;
+pub mod authorizor;
 pub mod policy;
 pub mod session;
 pub mod store;

@@ -111,6 +111,15 @@ impl PolicyStore for FilePolicyStore {
         self.store_user(false, &user, password)
     }
 
+    fn authenticate_user(&self, login_name: &str, password: &str) -> Result<User, ()> {
+        let user = self.load_user(login_name)?;
+        let hash = user.password_hash.as_ref().ok_or(())?;
+        if !sha512_crypt::verify(password, hash.as_str()) {
+            return Err(());
+        };
+        Ok(user.into())
+    }
+
     fn group_named(&self, name: &str) -> Option<Group> {
         load(&self.group_dir, name)
             .map_err(|e| warn!("Error loading group '{}': {:?}", name, e))
