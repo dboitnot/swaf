@@ -43,3 +43,13 @@ Content-type: application/json
 "groups": [],
 "policy_statements":[]
 }
+
+# Update a user
+POST :swaf/user
+Content-type: application/json
+{
+"login_name": "dan",
+"full_name": "Danton",
+"groups": [],
+"policy_statements":[]
+}

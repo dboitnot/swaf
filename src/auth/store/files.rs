@@ -1,6 +1,7 @@
 use crate::auth::policy::{Group, PolicyStatement, PolicyStore, User};
 use fs2::FileExt;
 use log::{info, warn};
+use pwhash::sha512_crypt;
 use rocket::serde::json;
 use rocket::serde::{Deserialize, DeserializeOwned, Serialize};
 use std::env;
@@ -60,23 +61,54 @@ impl FilePolicyStore {
         check_dir("group", &store.user_dir)?;
         Ok(store)
     }
-}
 
-impl PolicyStore for FilePolicyStore {
-    fn create_user(&self, user: &User) -> Result<(), ()> {
+    fn load_user(&self, login_name: &str) -> Result<StoredUser, ()> {
+        load(&self.user_dir, login_name)
+            .map_err(|e| warn!("Error loading user '{}': {}", login_name, e))
+    }
+
+    fn store_user(
+        &self,
+        create_new: bool,
+        user: &User,
+        password_hash: Option<String>,
+    ) -> Result<(), ()> {
         store(
             &self.user_dir,
             &user.login_name,
-            true,
+            create_new,
             &StoredUser {
                 login_name: user.login_name.clone(),
                 full_name: user.full_name.clone(),
                 groups: user.groups.clone(),
                 policy_statements: user.policy_statements.clone(),
-                password_hash: None,
+                password_hash,
             },
         )
         .map_err(|e| warn!("Error creating user: {:?}", e))
+    }
+}
+
+impl PolicyStore for FilePolicyStore {
+    fn create_user(&self, user: &User) -> Result<(), ()> {
+        self.store_user(true, user, None)
+    }
+
+    fn update_user(&self, user: &User) -> Result<(), ()> {
+        let old_user = self.load_user(user.login_name.as_str())?;
+        self.store_user(false, user, old_user.password_hash)
+    }
+
+    fn set_user_password(&self, login_name: &str, password: Option<&str>) -> Result<(), ()> {
+        let old_user = self.load_user(login_name)?;
+        let user = User::from(old_user);
+        let password = match password {
+            None => None,
+            Some(pw) => {
+                Some(sha512_crypt::hash(pw).map_err(|e| warn!("Error hashing password: {}", e))?)
+            }
+        };
+        self.store_user(false, &user, password)
     }
 
     fn group_named(&self, name: &str) -> Option<Group> {

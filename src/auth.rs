@@ -4,7 +4,6 @@ pub mod session;
 pub mod store;
 
 use crate::auth::authorizor::RequestAuthorizor;
-use crate::auth::policy::{Group, PolicyStore, User};
 use crate::files::RequestedFile;
 use crate::meta::{file_children, metadata_for_file, FileMetadata};
 use rocket::http::Status;
@@ -12,29 +11,6 @@ use rocket::outcome::try_outcome;
 use rocket::request::{FromRequest, Outcome, Request};
 use rocket::serde::Serialize;
 use std::path::PathBuf;
-
-pub type SessionPolicyStore = Box<dyn PolicyStore>;
-
-// Placeholder for actual policy store loading based on configuration.
-struct SessionPolicyStoreImpl;
-
-impl PolicyStore for SessionPolicyStoreImpl {
-    fn create_user(&self, _user: &User) -> Result<(), ()> {
-        Ok(())
-    }
-    fn group_named(&self, _name: &str) -> Option<Group> {
-        None
-    }
-}
-
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for SessionPolicyStore {
-    type Error = ();
-
-    async fn from_request(_request: &'r Request<'_>) -> Outcome<SessionPolicyStore, ()> {
-        Outcome::Success(Box::new(SessionPolicyStoreImpl {}))
-    }
-}
 
 pub struct RequestedFileDataReadable {
     pub real_path: PathBuf,

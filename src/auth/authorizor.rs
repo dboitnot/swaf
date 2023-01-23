@@ -1,12 +1,13 @@
-use crate::auth::policy::{Effect, Group, PolicyStatement};
+use crate::auth::policy::{Effect, Group, PolicyStatement, PolicyStore};
 use crate::auth::session::Session;
-use crate::auth::SessionPolicyStore;
+use crate::auth::store::files::FilePolicyStore;
 use crate::meta::MetadataAuthorizor;
 use futures::executor;
 use log::{info, warn};
 use rocket::http::Status;
 use rocket::outcome::try_outcome;
 use rocket::request::{FromRequest, Outcome, Request};
+use rocket::State;
 use std::path::{Path, PathBuf};
 
 pub struct RequestAuthorizor {
@@ -20,7 +21,9 @@ impl<'r> FromRequest<'r> for RequestAuthorizor {
 
     async fn from_request(request: &'r Request<'_>) -> Outcome<RequestAuthorizor, ()> {
         let user = try_outcome!(request.guard::<Session>().await.map(|session| session.user));
-        let policy_store = try_outcome!(executor::block_on(request.guard::<SessionPolicyStore>()));
+        let policy_store = try_outcome!(executor::block_on(
+            request.guard::<&State<FilePolicyStore>>()
+        ));
         let policy_statements: Vec<PolicyStatement> = user.policy_statements;
         let groups = user
             .groups

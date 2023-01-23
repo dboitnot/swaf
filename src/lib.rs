@@ -37,9 +37,35 @@ fn user_current(session: Session) -> Json<User> {
 // TODO: Should be able to load the PolicyStore trait from the guard.
 // TODO: Authorize
 #[put("/user", format = "application/json", data = "<user>")]
-fn user_create(policy_store: &State<FilePolicyStore>, user: Json<User>) -> Result<(), ()> {
+fn user_create(policy_store: &State<FilePolicyStore>, user: Json<User>) -> Result<(), Status> {
     let user = user.into_inner();
-    policy_store.create_user(&user)
+    policy_store
+        .create_user(&user)
+        .map_err(|_| Status::BadRequest)
+}
+
+#[post("/user", format = "application/json", data = "<user>")]
+fn user_update(policy_store: &State<FilePolicyStore>, user: Json<User>) -> Result<(), Status> {
+    let user = user.into_inner();
+    policy_store
+        .update_user(&user)
+        .map_err(|_| Status::BadRequest)
+}
+
+#[post("/user/<login_name>/password", data = "<password>")]
+fn user_set_password(
+    policy_store: &State<FilePolicyStore>,
+    login_name: &str,
+    password: &str,
+) -> Result<(), Status> {
+    let password = if password.is_empty() {
+        None
+    } else {
+        Some(password)
+    };
+    policy_store
+        .set_user_password(login_name, password)
+        .map_err(|_| Status::BadRequest)
 }
 
 fn add_session_cookie(cookies: &CookieJar) -> Result<(), Status> {
@@ -132,7 +158,9 @@ pub fn launch() -> Rocket<Build> {
                 get_file_meta,
                 get_file_children,
                 upload,
-                user_create
+                user_create,
+                user_set_password,
+                user_update
             ],
         )
         .mount("/", routes![spa_files])
