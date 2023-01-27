@@ -2,6 +2,7 @@ module Pages.Home_ exposing (Child, Children, ChildrenSortOn, Model, Msg, Upload
 
 import Browser.Navigation as Nav
 import DateFormat
+import Dict
 import File exposing (File)
 import File.Select as Select
 import Html as H
@@ -79,10 +80,10 @@ type alias Model =
 
 
 page : Shared.Model -> Request -> Page.With Model Msg
-page sharedModel _ =
+page sharedModel req =
     Page.protected.element
         (\user ->
-            { init = init sharedModel
+            { init = init sharedModel req
             , update = update sharedModel
             , view = view user
             , subscriptions = subscriptions
@@ -90,8 +91,8 @@ page sharedModel _ =
         )
 
 
-init : Shared.Model -> ( Model, Cmd Msg )
-init sharedModel =
+init : Shared.Model -> Request -> ( Model, Cmd Msg )
+init sharedModel req =
     ( { metadata = RemoteData.NotAsked
       , children = RemoteData.NotAsked
       , timeZone = Time.utc
@@ -101,7 +102,7 @@ init sharedModel =
       , uploadProgress = Nothing
       }
     , Cmd.batch
-        [ getMetadata sharedModel ""
+        [ getMetadata sharedModel (req.query |> Dict.get "p" |> Maybe.withDefault "")
         , Task.perform AdjustTimeZone Time.here
         , Task.perform Tick Time.now
         ]

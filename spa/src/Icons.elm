@@ -170,11 +170,12 @@ fontVariationPart attrs key part =
 
 
 -- Icon Constants
+-- https://fonts.google.com/icons
 
 
-folder : Icon msg
-folder =
-    icon "folder"
+createNewFolder : Icon msg
+createNewFolder =
+    icon "create_new_folder"
 
 
 download : Icon msg
@@ -187,9 +188,19 @@ downloadOff =
     icon "file_download_off"
 
 
+folder : Icon msg
+folder =
+    icon "folder"
+
+
 home : Icon msg
 home =
     icon "home"
+
+
+logout : Icon msg
+logout =
+    icon "logout"
 
 
 upload : Icon msg
@@ -200,8 +211,3 @@ upload =
 uploadOff : Icon msg
 uploadOff =
     icon "file_upload_off"
-
-
-createNewFolder : Icon msg
-createNewFolder =
-    icon "create_new_folder"

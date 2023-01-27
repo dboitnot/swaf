@@ -57,7 +57,7 @@ init sharedModel =
 
 type Msg
     = GetUserResponse (WebData UserInfo)
-    | ClickedSignIn
+    | SignInClicked
     | SignInResponse (WebData UserInfo)
     | UsernameChanged String
     | PasswordChanged String
@@ -72,7 +72,7 @@ update sharedModel msg model =
         GetUserResponse r ->
             ( { model | getUserRequest = r }, Effect.none )
 
-        ClickedSignIn ->
+        SignInClicked ->
             ( model, Effect.fromCmd (sendSignIn sharedModel model) )
 
         SignInResponse (RemoteData.Success userInfo) ->
@@ -98,15 +98,24 @@ sendGetUser sharedModel =
 
 sendSignIn : Shared.Model -> Model -> Cmd Msg
 sendSignIn sharedModel model =
-    Http.post
-        { url = sharedModel.baseUrl ++ "/api/login"
-        , body =
-            Http.multipartBody
-                [ Http.stringPart "login_name" (Maybe.withDefault "" model.username)
-                , Http.stringPart "password" (Maybe.withDefault "" model.password)
-                ]
-        , expect = userInfoDecoder |> Http.expectJson (RemoteData.fromResult >> SignInResponse)
-        }
+    if signInDisabled model then
+        Cmd.none
+
+    else
+        Http.post
+            { url = sharedModel.baseUrl ++ "/api/login"
+            , body =
+                Http.multipartBody
+                    [ Http.stringPart "login_name" (Maybe.withDefault "" model.username)
+                    , Http.stringPart "password" (Maybe.withDefault "" model.password)
+                    ]
+            , expect = userInfoDecoder |> Http.expectJson (RemoteData.fromResult >> SignInResponse)
+            }
+
+
+signInDisabled : Model -> Bool
+signInDisabled model =
+    model.signInRequest == RemoteData.Loading
 
 
 
@@ -154,7 +163,7 @@ signInInputs : Model -> List (H.Html Msg)
 signInInputs model =
     [ W.InputText.view [ W.InputText.placeholder "Username" ]
         { onInput = UsernameChanged, value = Maybe.withDefault "" model.username }
-    , W.InputText.view [ W.InputText.placeholder "Password", W.InputText.password ]
+    , W.InputText.view [ W.InputText.placeholder "Password", W.InputText.password, W.InputText.onEnter SignInClicked ]
         { onInput = PasswordChanged, value = Maybe.withDefault "" model.password }
     , signInButton model
     ]
@@ -162,8 +171,8 @@ signInInputs model =
 
 signInButton : Model -> H.Html Msg
 signInButton model =
-    W.Button.view [ W.Button.disabled (model.signInRequest == RemoteData.Loading) ]
-        { label = [ H.text "Sign In" ], onClick = ClickedSignIn }
+    W.Button.view [ W.Button.disabled (signInDisabled model) ]
+        { label = [ H.text "Sign In" ], onClick = SignInClicked }
 
 
 
