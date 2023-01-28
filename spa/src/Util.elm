@@ -1,6 +1,9 @@
-module Util exposing (boolToMaybe, flattenMaybeList, formatFileSize, httpErrorToString, maybeEmptyString)
+module Util exposing (authorizedUpdate, boolToMaybe, flattenMaybeList, formatFileSize, httpErrorToString, maybeEmptyString)
 
+import Gen.Route
 import Http
+import RemoteData exposing (WebData)
+import Request exposing (Request)
 import Round
 
 
@@ -67,3 +70,13 @@ httpErrorToString error =
 
         Http.BadBody s ->
             "Error parsing server response: " ++ s
+
+
+authorizedUpdate : Request -> mod -> WebData d -> (() -> ( mod, Cmd msg )) -> ( mod, Cmd msg )
+authorizedUpdate req mod res fnIfAuthorized =
+    case res of
+        RemoteData.Failure (Http.BadStatus 401) ->
+            ( mod, Request.pushRoute Gen.Route.SignIn req )
+
+        _ ->
+            fnIfAuthorized ()

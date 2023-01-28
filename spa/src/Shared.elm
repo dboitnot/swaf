@@ -8,7 +8,7 @@ module Shared exposing
     , update
     )
 
-import Gen.Route
+import Browser.Navigation as Nav
 import Json.Decode as Json
 import Model exposing (UserInfo)
 import Request exposing (Request)
@@ -22,6 +22,7 @@ type alias Flags =
 type alias Model =
     { user : Maybe User
     , baseUrl : String
+    , reqUrl : Url
     }
 
 
@@ -41,7 +42,7 @@ init req _ =
         reqUrl =
             req.url
     in
-    ( { user = Nothing, baseUrl = Url.toString { reqUrl | path = "" } }, Cmd.none )
+    ( { user = Nothing, baseUrl = Url.toString { reqUrl | path = "", query = Nothing }, reqUrl = reqUrl }, Cmd.none )
 
 
 update : Request -> Msg -> Model -> ( Model, Cmd Msg )
@@ -49,7 +50,8 @@ update req msg model =
     case msg of
         SignIn user ->
             ( { model | user = Just user }
-            , Request.pushRoute Gen.Route.Home_ req
+            , -- Request.pushRoute Gen.Route.Browse req
+              Nav.pushUrl req.key (Url.toString model.reqUrl)
             )
 
         SignOut ->

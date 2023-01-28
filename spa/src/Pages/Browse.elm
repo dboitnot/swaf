@@ -1,10 +1,11 @@
-module Pages.Home_ exposing (Child, Children, ChildrenSortOn, Model, Msg, UploadStatus, page)
+module Pages.Browse exposing (Child, Children, ChildrenSortOn, Model, Msg, UploadStatus, page)
 
 import Browser.Navigation as Nav
 import DateFormat
 import Dict
 import File exposing (File)
 import File.Select as Select
+import Gen.Route
 import Html as H
 import Html.Attributes as A
 import Html.Events as E
@@ -18,7 +19,8 @@ import Round
 import Shared exposing (User)
 import Task
 import Time
-import Util exposing (boolToMaybe, flattenMaybeList, formatFileSize, httpErrorToString)
+import Url.Builder exposing (relative)
+import Util exposing (authorizedUpdate, boolToMaybe, flattenMaybeList, formatFileSize, httpErrorToString)
 import View exposing (View)
 import W.Button
 import W.Container
@@ -84,7 +86,7 @@ page sharedModel req =
     Page.protected.element
         (\user ->
             { init = init sharedModel req
-            , update = update sharedModel
+            , update = update sharedModel req
             , view = view user
             , subscriptions = subscriptions
             }
@@ -113,8 +115,8 @@ init sharedModel req =
 -- UPDATE
 
 
-update : Shared.Model -> Msg -> Model -> ( Model, Cmd Msg )
-update sharedModel msg model =
+update : Shared.Model -> Request -> Msg -> Model -> ( Model, Cmd Msg )
+update sharedModel req msg model =
     case msg of
         NoOp ->
             ( model, Cmd.none )
@@ -126,19 +128,20 @@ update sharedModel msg model =
             ( { model | time = newTime }, Cmd.none )
 
         GotMetadata meta ->
-            ( { model | metadata = meta }, updateMetaCmd sharedModel meta )
+            authorizedUpdate req model meta (\_ -> ( { model | metadata = meta }, updateMetaCmd sharedModel meta ))
 
         GotChildren children ->
-            ( { model | children = children |> wrapChildren |> sortChildren model }
-            , Cmd.none
-            )
+            authorizedUpdate req
+                model
+                children
+                (\_ -> ( { model | children = children |> wrapChildren |> sortChildren model }, Cmd.none ))
 
         CrumbClicked path ->
             ( { model
                 | metadata = RemoteData.NotAsked
                 , children = RemoteData.NotAsked
               }
-            , getMetadata sharedModel path
+            , pushPathThen req path (getMetadata sharedModel path)
             )
 
         ChildClicked child ->
@@ -151,7 +154,7 @@ update sharedModel msg model =
                 | metadata = meta
                 , children = RemoteData.NotAsked
               }
-            , updateMetaCmd sharedModel meta
+            , pushPathThen req child.metadata.path (updateMetaCmd sharedModel meta)
             )
 
         ChildSelectionChanged child selected ->
@@ -200,6 +203,14 @@ update sharedModel msg model =
 
         MkdirClicked ->
             ( model, Cmd.none )
+
+
+pushPathThen : Request -> String -> Cmd Msg -> Cmd Msg
+pushPathThen req path cmd =
+    Cmd.batch
+        [ Nav.pushUrl req.key (relative [ Gen.Route.toHref Gen.Route.Browse ] [ Url.Builder.string "p" path ])
+        , cmd
+        ]
 
 
 updateChildSelection : Child -> Bool -> List Child -> List Child
