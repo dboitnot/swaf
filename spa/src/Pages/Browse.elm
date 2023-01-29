@@ -11,6 +11,7 @@ import Html.Attributes as A
 import Html.Events as E
 import Http
 import Icons as I
+import Layout exposing (layout)
 import Model exposing (FileChildren, FileMetadata, fileChildrenDecoder, fileMetadataDecoder)
 import Page
 import RemoteData exposing (WebData)
@@ -26,7 +27,6 @@ import W.Button
 import W.Container
 import W.InputCheckbox
 import W.Modal
-import W.Styles
 import W.Table
 
 
@@ -338,41 +338,23 @@ upload sharedModel model file =
 
 view : User -> Model -> View Msg
 view user model =
-    { title = "Hi there"
-    , body =
-        [ H.div []
-            (flattenMaybeList
-                [ Just W.Styles.globalStyles
-                , Just W.Styles.baseTheme
-                , Just
-                    (W.Container.view
-                        [ W.Container.vertical, W.Container.alignCenterX ]
-                        [ menuBar user model
-                        , fileDisplay model
-                        ]
-                    )
-                , uploadModal model
-                ]
-            )
-        ]
-    }
+    layout user
+        ("/" ++ Maybe.withDefault "<Loading>" (currentPath model))
+        (flattenMaybeList
+            [ Just (fileDisplay model)
+            , uploadModal model
+            ]
+        )
 
 
-menuBar : User -> Model -> H.Html msg
-menuBar user _ =
-    W.Container.view [ W.Container.horizontal ]
-        [ H.text (userDisplayName user)
-        ]
+currentPath : Model -> Maybe String
+currentPath model =
+    case model.metadata of
+        RemoteData.Success meta ->
+            Just meta.path
 
-
-userDisplayName : User -> String
-userDisplayName user =
-    case user.info.fullName of
-        Just name ->
-            name
-
-        Nothing ->
-            user.info.loginName
+        _ ->
+            Nothing
 
 
 fileDisplay : Model -> H.Html Msg
