@@ -7,9 +7,19 @@ GET :swaf/health
 
 # Login
 POST :swaf/login
+Content-type: application/x-www-form-urlencoded
+login_name=dan&password=thisismypassword&
 
 # Get the current user's details
 GET :swaf/user/current
+Accept: application/json
+
+# List users
+GET :swaf/users
+Accept: application/json
+
+# List groups
+GET :swaf/groups
 Accept: application/json
 
 # Download test file

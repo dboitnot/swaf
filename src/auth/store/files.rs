@@ -5,6 +5,7 @@ use pwhash::sha512_crypt;
 use rocket::serde::json;
 use rocket::serde::{Deserialize, DeserializeOwned, Serialize};
 use std::env;
+use std::fmt::Debug;
 use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::Read;
@@ -58,13 +59,17 @@ impl FilePolicyStore {
         };
 
         check_dir("user", &store.user_dir)?;
-        check_dir("group", &store.user_dir)?;
+        check_dir("group", &store.group_dir)?;
         Ok(store)
     }
 
     fn load_user(&self, login_name: &str) -> Result<StoredUser, ()> {
         load(&self.user_dir, login_name)
             .map_err(|e| warn!("Error loading user '{}': {}", login_name, e))
+    }
+
+    fn load_group(&self, name: &str) -> Result<Group, ()> {
+        load(&self.group_dir, name).map_err(|e| warn!("Error loading group '{}': {}", name, e))
     }
 
     fn store_user(
@@ -91,18 +96,11 @@ impl FilePolicyStore {
 
 impl PolicyStore for FilePolicyStore {
     fn list_users(&self) -> Result<Vec<User>, ()> {
-        Ok(fs::read_dir(&self.user_dir)
-            .map_err(|e| warn!("Error listing users: {}", e))?
-            .filter_map(|r| r.ok())
-            .filter(|e| e.file_type().map_or(false, |t| t.is_file()))
-            .map(|e| e.file_name().into_string())
-            .filter_map(|r| r.ok())
-            .filter(|n| n.ends_with(".json"))
-            .map(|n| String::from(n.trim_end_matches(".json")))
-            .map(|n| self.load_user(&n))
-            .filter_map(|r| r.ok())
-            .map(User::from)
-            .collect())
+        list(&self.user_dir, |n| self.load_user(n).map(User::from))
+    }
+
+    fn list_groups(&self) -> Result<Vec<Group>, ()> {
+        list(&self.group_dir, |n| self.load_group(n))
     }
 
     fn create_user(&self, user: &User) -> Result<(), ()> {
@@ -140,9 +138,7 @@ impl PolicyStore for FilePolicyStore {
     }
 
     fn group_named(&self, name: &str) -> Option<Group> {
-        load(&self.group_dir, name)
-            .map_err(|e| warn!("Error loading group '{}': {:?}", name, e))
-            .ok()
+        self.load_group(name).ok()
     }
 }
 
@@ -246,4 +242,22 @@ where
             .map_err(|e| format!("Error writing {} in {:?}: {:?}", name, dir, e))
             .map(|_| ())
     })
+}
+
+fn list<P, O, F>(path: P, f: F) -> Result<Vec<O>, ()>
+where
+    P: AsRef<Path> + Debug,
+    F: Fn(&str) -> Result<O, ()>,
+{
+    Ok(fs::read_dir(&path)
+        .map_err(|e| warn!("Error reading object directory {:?}: {}", &path, e))?
+        .filter_map(|r| r.ok())
+        .filter(|e| e.file_type().map_or(false, |t| t.is_file()))
+        .map(|e| e.file_name().into_string())
+        .filter_map(|r| r.ok())
+        .filter(|n| n.ends_with(".json"))
+        .map(|n| String::from(n.trim_end_matches(".json")))
+        .map(|n| f(&n))
+        .filter_map(|r| r.ok())
+        .collect())
 }

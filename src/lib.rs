@@ -1,5 +1,5 @@
 use auth::authorizor::RequestAuthorizor;
-use auth::policy::{PolicyStore, User};
+use auth::policy::{Group, PolicyStore, User};
 use auth::session::{Session, SessionCookie};
 use auth::store::files::FilePolicyStore;
 use auth::{FileChildren, RequestedFileDataWritable, RequestedRegularFileDataReadable};
@@ -11,6 +11,7 @@ use rocket::fs::TempFile;
 use rocket::http::{Cookie, CookieJar, Status};
 use rocket::serde::json;
 use rocket::serde::json::Json;
+use rocket::serde::Serialize;
 use rocket::State;
 use rocket::{Build, Rocket};
 use std::io::ErrorKind;
@@ -36,8 +37,43 @@ fn user_current(session: Session) -> Json<User> {
     Json(session.user)
 }
 
+#[derive(Serialize)]
+#[serde(crate = "rocket::serde")]
+struct UserList {
+    users: Vec<User>,
+}
+
+#[get("/users")]
+fn user_list(
+    auth: RequestAuthorizor,
+    policy_store: &State<FilePolicyStore>,
+) -> Result<Json<UserList>, Status> {
+    auth.require("ListUsers", &"").ok()?;
+    let users = policy_store
+        .list_users()
+        .map_err(|_| Status::InternalServerError)?;
+    Ok(Json(UserList { users }))
+}
+
+#[derive(Serialize)]
+#[serde(crate = "rocket::serde")]
+struct GroupList {
+    groups: Vec<Group>,
+}
+
+#[get("/groups")]
+fn group_list(
+    auth: RequestAuthorizor,
+    policy_store: &State<FilePolicyStore>,
+) -> Result<Json<GroupList>, Status> {
+    auth.require("ListGroups", &"").ok()?;
+    let groups = policy_store
+        .list_groups()
+        .map_err(|_| Status::InternalServerError)?;
+    Ok(Json(GroupList { groups }))
+}
+
 // TODO: Should be able to load the PolicyStore trait from the guard.
-// TODO: Authorize
 // TODO: Rather than getting the authorizer here, maybe derive a concrete
 //       AuthenticatedPolicyStore which wraps calls to the underlying store?
 #[put("/user", format = "application/json", data = "<user>")]
@@ -182,9 +218,11 @@ pub fn launch() -> Rocket<Build> {
                 get_file_meta,
                 get_file_children,
                 upload,
+                user_list,
                 user_create,
                 user_set_password,
-                user_update
+                user_update,
+                group_list
             ],
         )
         .mount("/", routes![spa_files])
