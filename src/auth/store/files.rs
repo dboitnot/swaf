@@ -90,6 +90,21 @@ impl FilePolicyStore {
 }
 
 impl PolicyStore for FilePolicyStore {
+    fn list_users(&self) -> Result<Vec<User>, ()> {
+        Ok(fs::read_dir(&self.user_dir)
+            .map_err(|e| warn!("Error listing users: {}", e))?
+            .filter_map(|r| r.ok())
+            .filter(|e| e.file_type().map_or(false, |t| t.is_file()))
+            .map(|e| e.file_name().into_string())
+            .filter_map(|r| r.ok())
+            .filter(|n| n.ends_with(".json"))
+            .map(|n| String::from(n.trim_end_matches(".json")))
+            .map(|n| self.load_user(&n))
+            .filter_map(|r| r.ok())
+            .map(User::from)
+            .collect())
+    }
+
     fn create_user(&self, user: &User) -> Result<(), ()> {
         self.store_user(true, user, None)
     }
