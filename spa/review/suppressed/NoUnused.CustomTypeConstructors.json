@@ -3,6 +3,10 @@
   "automatically created by": "elm-review suppress",
   "learn more": "elm-review suppress --help",
   "suppressions": [
+    { "count": 1, "filePath": "src/Pages/Admin/Group/Name_.elm" },
+    { "count": 1, "filePath": "src/Pages/Admin/Groups.elm" },
+    { "count": 1, "filePath": "src/Pages/Admin/User/Name_.elm" },
+    { "count": 1, "filePath": "src/Pages/Admin/Users.elm" },
     { "count": 1, "filePath": "src/Pages/Browse.elm" },
     { "count": 1, "filePath": "src/Shared.elm" }
   ]

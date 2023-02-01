@@ -1,6 +1,7 @@
 module Icons exposing
     ( Attribute
     , Icon
+    , accountCircle
     , createNewFolder
     , download
     , downloadOff
@@ -9,6 +10,7 @@ module Icons exposing
     , grade
     , home
     , icon
+    , menu
     , onClick
     , opticalSize
     , size
@@ -173,6 +175,11 @@ fontVariationPart attrs key part =
 -- https://fonts.google.com/icons
 
 
+accountCircle : Icon msg
+accountCircle =
+    icon "account_circle"
+
+
 createNewFolder : Icon msg
 createNewFolder =
     icon "create_new_folder"
@@ -201,6 +208,11 @@ home =
 logout : Icon msg
 logout =
     icon "logout"
+
+
+menu : Icon msg
+menu =
+    icon "menu"
 
 
 upload : Icon msg
