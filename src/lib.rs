@@ -124,9 +124,8 @@ fn user_set_password(
 }
 
 fn add_session_cookie(cookies: &CookieJar, username: &str) -> Result<(), Status> {
-    // TODO: Actually load the user from store
     let exp = now_as_secs()
-        .map(|now| now + 300)
+        .map(|now| now + 3600)
         .map_err(|_| Status::InternalServerError)?;
     let session_cookie = SessionCookie {
         username: String::from(username),
