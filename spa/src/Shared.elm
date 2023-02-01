@@ -9,6 +9,7 @@ module Shared exposing
     )
 
 import Browser.Navigation as Nav
+import Gen.Route
 import Json.Decode as Json
 import Model exposing (UserInfo)
 import Request exposing (Request)
@@ -50,8 +51,11 @@ update req msg model =
     case msg of
         SignIn user ->
             ( { model | user = Just user }
-            , -- Request.pushRoute Gen.Route.Browse req
-              Nav.pushUrl req.key (Url.toString model.reqUrl)
+            , if String.startsWith "/sign-in" model.reqUrl.path then
+                Request.pushRoute Gen.Route.Browse req
+
+              else
+                Nav.pushUrl req.key (Url.toString model.reqUrl)
             )
 
         SignOut ->
