@@ -1,4 +1,12 @@
-module Util exposing (authorizedUpdate, boolToMaybe, flattenMaybeList, formatFileSize, httpErrorToString, maybeEmptyString)
+module Util exposing
+    ( authorizedUpdate
+    , boolToMaybe
+    , flattenMaybeList
+    , formatFileSize
+    , httpErrorToString
+    , maybeEmptyString
+    , sortBy
+    )
 
 import Gen.Route
 import Http
@@ -80,3 +88,8 @@ authorizedUpdate req mod res fnIfAuthorized =
 
         _ ->
             fnIfAuthorized ()
+
+
+sortBy : (o -> comparable) -> (o -> o -> Order)
+sortBy fn =
+    \a b -> compare (fn a) (fn b)

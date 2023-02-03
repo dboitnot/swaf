@@ -156,6 +156,12 @@ fn login(
     Ok(Json(user))
 }
 
+#[get("/logout")]
+fn logout(cookies: &CookieJar<'_>) -> &'static str {
+    cookies.remove_private(Cookie::named("session"));
+    "Ok"
+}
+
 #[get("/file/<_..>")]
 async fn get_file_data(file: RequestedRegularFileDataReadable) -> Result<NamedFile, Status> {
     NamedFile::open(file.real_path)
@@ -213,6 +219,7 @@ pub fn launch() -> Rocket<Build> {
                 health,
                 user_current,
                 login,
+                logout,
                 get_file_data,
                 get_file_meta,
                 get_file_children,

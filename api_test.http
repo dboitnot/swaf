@@ -10,6 +10,9 @@ POST :swaf/login
 Content-type: application/x-www-form-urlencoded
 login_name=dan&password=thisismypassword&
 
+# Logout
+GET :swaf/logout
+
 # Get the current user's details
 GET :swaf/user/current
 Accept: application/json

@@ -18,6 +18,7 @@ module Icons exposing
     , tooltipText
     , upload
     , uploadOff
+    , warning
     , weight
     )
 
@@ -223,3 +224,8 @@ upload =
 uploadOff : Icon msg
 uploadOff =
     icon "file_upload_off"
+
+
+warning : Icon msg
+warning =
+    icon "warning"

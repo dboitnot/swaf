@@ -3,6 +3,7 @@
   "automatically created by": "elm-review suppress",
   "learn more": "elm-review suppress --help",
   "suppressions": [
-    { "count": 8, "filePath": "src/Icons.elm" }
+    { "count": 8, "filePath": "src/Icons.elm" },
+    { "count": 2, "filePath": "src/Model.elm" }
   ]
 }

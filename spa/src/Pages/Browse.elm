@@ -21,7 +21,7 @@ import Shared exposing (User)
 import Task
 import Time
 import Url.Builder exposing (relative)
-import Util exposing (authorizedUpdate, boolToMaybe, flattenMaybeList, formatFileSize, httpErrorToString)
+import Util exposing (authorizedUpdate, boolToMaybe, flattenMaybeList, formatFileSize, httpErrorToString, sortBy)
 import View exposing (View)
 import W.Button
 import W.Container
@@ -248,10 +248,6 @@ sortChildren model data =
 childSorter : Model -> (List Child -> List Child)
 childSorter model =
     let
-        sortBy : (FileMetadata -> comparable) -> (FileMetadata -> FileMetadata -> Order)
-        sortBy fn =
-            \a b -> compare (fn a) (fn b)
-
         cmp : FileMetadata -> FileMetadata -> Order
         cmp =
             case model.sortChildrenOn of
