@@ -98,6 +98,7 @@ type alias Conf o r msg =
     , title : String
     , items : WebData r
     , itemListKey : r -> List o
+    , buttonBar : List (H.Html msg)
     , listColumns : List (W.Table.Column msg o)
     , openItem : Editing o
     , openItemIsValid : Bool
@@ -115,6 +116,7 @@ crudView :
     , title : String
     , items : WebData r
     , itemListKey : r -> List o
+    , buttonBar : List (H.Html msg)
     , listColumns : List (W.Table.Column msg o)
     , openItem : Editing o
     , openItemIsValid : Bool
@@ -145,7 +147,7 @@ itemListView conf =
             listSpinner
 
         RemoteData.Success data ->
-            itemTable conf (conf.itemListKey data)
+            itemView conf (conf.itemListKey data)
 
         RemoteData.Failure (Http.BadStatus 403) ->
             errorView "Access Denied" "You are not authorized to view this information."
@@ -163,6 +165,15 @@ errorView : String -> String -> H.Html msg
 errorView title detail =
     W.Notification.view [ W.Notification.icon [ Icons.warning [] ], W.Notification.danger ]
         [ H.text detail ]
+
+
+itemView : Conf o r msg -> List o -> H.Html msg
+itemView conf items =
+    W.Container.view [ W.Container.vertical ]
+        [ W.Container.view [ W.Container.horizontal, W.Container.alignRight, W.Container.pad_2, W.Container.gap_2 ]
+            conf.buttonBar
+        , itemTable conf items
+        ]
 
 
 itemTable : Conf o r msg -> List o -> H.Html msg

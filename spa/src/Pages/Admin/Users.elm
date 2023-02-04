@@ -15,6 +15,7 @@ import Shared exposing (User)
 import Util
     exposing
         ( authorizedUpdate
+        , flattenMaybeList
         , httpErrorToString
         , maybeEmptyString
         , maybeIs
@@ -27,6 +28,7 @@ import W.Divider
 import W.InputField
 import W.InputText
 import W.Menu
+import W.Message
 import W.Popover
 import W.Table
 import W.Tag
@@ -83,6 +85,7 @@ type Msg
     = NoOp
     | GotUsers (WebData UserList)
     | GotGroups (WebData GroupList)
+    | CreateClicked
     | UserClicked UserInfo
     | StringFieldEdited (UserInfo -> String -> UserInfo) String
     | GroupAddClicked String
@@ -106,6 +109,9 @@ update sharedModel req msg model =
 
         GotGroups groups ->
             ( { model | allGroups = groups }, Cmd.none )
+
+        CreateClicked ->
+            startEditing model (CrudView.Creating { loginName = "", fullName = Nothing, groups = [], policyStatements = [] })
 
         UserClicked user ->
             ( { model
@@ -151,11 +157,21 @@ update sharedModel req msg model =
             ( { model | pwResetModel = PR.update model.pwResetModel m }, Cmd.none )
 
 
+startEditing : Model -> Editing UserInfo -> ( Model, Cmd Msg )
+startEditing model edit =
+    ( { model
+        | openUser = edit
+        , pwResetModel = PR.newModel { forceChange = isCreating edit }
+      }
+    , Cmd.none
+    )
+
+
 editSaveClicked : Shared.Model -> Model -> ( Model, Cmd Msg )
 editSaveClicked sharedModel model =
     case model.openUser of
-        CrudView.Creating _ ->
-            ( model, Cmd.none )
+        CrudView.Creating user ->
+            ( { model | openUser = CrudView.CreateLoading user }, createUser sharedModel user )
 
         CrudView.Updating user ->
             ( { model | openUser = CrudView.UpdateLoading user }, updateUser sharedModel user )
@@ -237,6 +253,19 @@ getGroups sharedModel =
         }
 
 
+createUser : Shared.Model -> UserInfo -> Cmd Msg
+createUser sharedModel user =
+    Http.request
+        { url = sharedModel.baseUrl ++ "/api/user"
+        , method = "PUT"
+        , headers = []
+        , body = Http.jsonBody (userInfoEncoder user)
+        , expect = Http.expectWhatever UserUpdated
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
 updateUser : Shared.Model -> UserInfo -> Cmd Msg
 updateUser sharedModel user =
     Http.post
@@ -280,6 +309,7 @@ view user model =
             , W.Table.column [] { label = "Groups", content = \u -> groupList Nothing u.groups }
             ]
         , itemListKey = .users
+        , buttonBar = [ W.Button.view [ W.Button.primary ] { label = [ H.text "Create User" ], onClick = CreateClicked } ]
         , onListClick = UserClicked
         , openItem = model.openUser
         , openItemIsValid = openItemIsValid model
@@ -290,9 +320,24 @@ view user model =
         }
 
 
+loginNameValidationMessage : String -> Maybe String
+loginNameValidationMessage name =
+    if String.length name < 1 then
+        Just "Login name is required"
+
+    else
+        Nothing
+
+
 openItemIsValid : Model -> Bool
 openItemIsValid model =
-    PR.isAcceptable model.pwResetModel
+    (editingItem model.openUser
+        |> Maybe.map .loginName
+        |> Maybe.andThen loginNameValidationMessage
+        |> maybeIs
+        |> not
+    )
+        && PR.isAcceptable model.pwResetModel
 
 
 editView : Model -> UserInfo -> H.Html Msg
@@ -302,11 +347,13 @@ editView model user =
             [ W.InputText.readOnly (isUpdating model.openUser) ]
             .loginName
             (\u v -> { u | loginName = v })
+            loginNameValidationMessage
             user
         , textInputField "Full Name"
             []
             (\u -> Maybe.withDefault "" u.fullName)
             (\u v -> { u | fullName = maybeEmptyString v })
+            (always Nothing)
             user
         , inputField "Password" (PR.view { wrapperMsg = PasswordMsg, model = model.pwResetModel })
         , inputField "Groups" (groupList (Just model) user.groups)
@@ -318,16 +365,40 @@ inputField label input =
     W.InputField.view [] { label = [ H.text label ], input = [ input ] }
 
 
+validatedInputField : String -> H.Html Msg -> Maybe String -> H.Html Msg
+validatedInputField label input validationMessage =
+    inputField label
+        (W.Container.view [ W.Container.vertical ]
+            (flattenMaybeList
+                [ Just input
+                , validationMessage
+                    |> Maybe.map (\m -> W.Message.view [ W.Message.danger ] [ H.text m ])
+                ]
+            )
+        )
+
+
 textInputField :
     String
     -> List (W.InputText.Attribute Msg)
     -> (UserInfo -> String)
     -> (UserInfo -> String -> UserInfo)
+    -> (String -> Maybe String)
     -> UserInfo
     -> H.Html Msg
-textInputField label attrs get set user =
-    inputField label
-        (W.InputText.view attrs { onInput = StringFieldEdited set, value = get user })
+textInputField label attrs get set validator user =
+    let
+        value : String
+        value =
+            get user
+    in
+    validatedInputField label
+        (W.InputText.view attrs { onInput = StringFieldEdited set, value = value })
+        (validator value)
+
+
+
+-- GROUP EDITING
 
 
 groupList : Maybe Model -> List String -> H.Html Msg
