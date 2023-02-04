@@ -1,11 +1,14 @@
 module Pages.Admin.Users exposing (Model, Msg, SortOn, page)
 
-import CrudView exposing (Editing, ErrorMessage, crudView, editMap, isUpdating)
+import CrudView exposing (Editing, ErrorMessage, crudView, editMap, editingItem, isCreating, isUpdating)
 import Gen.Params.Admin.Users exposing (Params)
 import Html as H
+import Html.Attributes as A
 import Http
-import Model exposing (UserInfo, UserList, userInfoEncoder, userListDecoder)
+import Icons
+import Model exposing (GroupList, UserInfo, UserList, groupListDecoder, userInfoEncoder, userListDecoder)
 import Page
+import PasswordReset as PR
 import RemoteData exposing (WebData)
 import Request
 import Shared exposing (User)
@@ -14,13 +17,19 @@ import Util
         ( authorizedUpdate
         , httpErrorToString
         , maybeEmptyString
+        , maybeIs
         , sortBy
         )
 import View exposing (View)
+import W.Button
 import W.Container
+import W.Divider
 import W.InputField
 import W.InputText
+import W.Menu
+import W.Popover
 import W.Table
+import W.Tag
 
 
 page : Shared.Model -> Request.With Params -> Page.With Model Msg
@@ -48,6 +57,8 @@ type alias Model =
     , sortOn : SortOn
     , openUser : Editing UserInfo
     , errorMessage : Maybe (ErrorMessage Msg)
+    , allGroups : WebData GroupList
+    , pwResetModel : PR.Model
     }
 
 
@@ -57,8 +68,10 @@ init sharedModel =
       , sortOn = Name
       , openUser = CrudView.NotEditing
       , errorMessage = Nothing
+      , allGroups = RemoteData.NotAsked
+      , pwResetModel = PR.newModel { forceChange = False }
       }
-    , getUsers sharedModel
+    , Cmd.batch [ getUsers sharedModel, getGroups sharedModel ]
     )
 
 
@@ -67,26 +80,51 @@ init sharedModel =
 
 
 type Msg
-    = GotUsers (WebData UserList)
+    = NoOp
+    | GotUsers (WebData UserList)
+    | GotGroups (WebData GroupList)
     | UserClicked UserInfo
     | StringFieldEdited (UserInfo -> String -> UserInfo) String
+    | GroupAddClicked String
+    | GroupDropClicked String
     | EditSaveClicked
     | EditCancelled
     | UserUpdated (Result Http.Error ())
+    | PasswordUpdated (Result Http.Error ())
     | UpdateErrorCleared
+    | PasswordMsg PR.Msg
 
 
 update : Shared.Model -> Request.With Params -> Msg -> Model -> ( Model, Cmd Msg )
 update sharedModel req msg model =
     case msg of
+        NoOp ->
+            ( model, Cmd.none )
+
         GotUsers users ->
             authorizedUpdate req model users (\_ -> ( { model | users = users |> sorted model }, Cmd.none ))
 
+        GotGroups groups ->
+            ( { model | allGroups = groups }, Cmd.none )
+
         UserClicked user ->
-            ( { model | openUser = CrudView.Updating user }, Cmd.none )
+            ( { model
+                | openUser = CrudView.Updating user
+                , pwResetModel = PR.newModel { forceChange = isCreating model.openUser }
+              }
+            , Cmd.none
+            )
 
         StringFieldEdited fn v ->
             ( { model | openUser = editMap fn model.openUser v }, Cmd.none )
+
+        GroupAddClicked groupName ->
+            ( { model | openUser = editMap (\u v -> { u | groups = u.groups ++ [ v ] }) model.openUser groupName }, Cmd.none )
+
+        GroupDropClicked name ->
+            ( { model | openUser = editMap (\u v -> { u | groups = List.filter (\n -> n /= v) u.groups }) model.openUser name }
+            , Cmd.none
+            )
 
         EditSaveClicked ->
             editSaveClicked sharedModel model
@@ -95,22 +133,22 @@ update sharedModel req msg model =
             ( { model | openUser = CrudView.NotEditing }, Cmd.none )
 
         UserUpdated (Ok _) ->
-            ( { model | openUser = CrudView.NotEditing }, getUsers sharedModel )
+            userUpdatedSuccess sharedModel model
 
         UserUpdated (Err e) ->
-            ( { model
-                | errorMessage =
-                    Just
-                        { title = "Error Updating User"
-                        , message = httpErrorToString e
-                        , onAck = UpdateErrorCleared
-                        }
-              }
-            , Cmd.none
-            )
+            updateError model "Error Updating User" e
+
+        PasswordUpdated (Ok _) ->
+            editComplete sharedModel model
+
+        PasswordUpdated (Err e) ->
+            updateError model "Error Setting User Password" e
 
         UpdateErrorCleared ->
             ( { model | errorMessage = Nothing }, Cmd.none )
+
+        PasswordMsg m ->
+            ( { model | pwResetModel = PR.update model.pwResetModel m }, Cmd.none )
 
 
 editSaveClicked : Shared.Model -> Model -> ( Model, Cmd Msg )
@@ -124,6 +162,42 @@ editSaveClicked sharedModel model =
 
         _ ->
             ( model, Cmd.none )
+
+
+userUpdatedSuccess : Shared.Model -> Model -> ( Model, Cmd Msg )
+userUpdatedSuccess sharedModel model =
+    let
+        up : Maybe ( UserInfo, String )
+        up =
+            Maybe.map2 (\u p -> ( u, p ))
+                (editingItem model.openUser)
+                (PR.valid model.pwResetModel)
+    in
+    case up of
+        Nothing ->
+            editComplete sharedModel model
+
+        Just ( user, password ) ->
+            ( model, updatePassword sharedModel user password )
+
+
+editComplete : Shared.Model -> Model -> ( Model, Cmd Msg )
+editComplete sharedModel model =
+    ( { model | openUser = CrudView.NotEditing }, getUsers sharedModel )
+
+
+updateError : Model -> String -> Http.Error -> ( Model, Cmd Msg )
+updateError model title err =
+    ( { model
+        | errorMessage =
+            Just
+                { title = title
+                , message = httpErrorToString err
+                , onAck = UpdateErrorCleared
+                }
+      }
+    , Cmd.none
+    )
 
 
 sorted : Model -> WebData UserList -> WebData UserList
@@ -155,12 +229,29 @@ getUsers sharedModel =
         }
 
 
+getGroups : Shared.Model -> Cmd Msg
+getGroups sharedModel =
+    Http.get
+        { url = sharedModel.baseUrl ++ "/api/groups"
+        , expect = groupListDecoder |> Http.expectJson (RemoteData.fromResult >> GotGroups)
+        }
+
+
 updateUser : Shared.Model -> UserInfo -> Cmd Msg
 updateUser sharedModel user =
     Http.post
         { url = sharedModel.baseUrl ++ "/api/user"
         , body = Http.jsonBody (userInfoEncoder user)
         , expect = Http.expectWhatever UserUpdated
+        }
+
+
+updatePassword : Shared.Model -> UserInfo -> String -> Cmd Msg
+updatePassword sharedModel user password =
+    Http.post
+        { url = sharedModel.baseUrl ++ "/api/user/" ++ user.loginName ++ "/password"
+        , body = Http.stringBody "text/plain" password
+        , expect = Http.expectWhatever PasswordUpdated
         }
 
 
@@ -186,15 +277,22 @@ view user model =
         , listColumns =
             [ W.Table.string [] { label = "Login Name", value = .loginName }
             , W.Table.string [] { label = "Full Name", value = \u -> Maybe.withDefault "<None>" u.fullName }
+            , W.Table.column [] { label = "Groups", content = \u -> groupList Nothing u.groups }
             ]
         , itemListKey = .users
         , onListClick = UserClicked
         , openItem = model.openUser
+        , openItemIsValid = openItemIsValid model
         , editView = editView model
         , onSave = EditSaveClicked
         , onCancelEdit = EditCancelled
         , errorMessage = model.errorMessage
         }
+
+
+openItemIsValid : Model -> Bool
+openItemIsValid model =
+    PR.isAcceptable model.pwResetModel
 
 
 editView : Model -> UserInfo -> H.Html Msg
@@ -210,6 +308,8 @@ editView model user =
             (\u -> Maybe.withDefault "" u.fullName)
             (\u v -> { u | fullName = maybeEmptyString v })
             user
+        , inputField "Password" (PR.view { wrapperMsg = PasswordMsg, model = model.pwResetModel })
+        , inputField "Groups" (groupList (Just model) user.groups)
         ]
 
 
@@ -228,3 +328,72 @@ textInputField :
 textInputField label attrs get set user =
     inputField label
         (W.InputText.view attrs { onInput = StringFieldEdited set, value = get user })
+
+
+groupList : Maybe Model -> List String -> H.Html Msg
+groupList maybeModel groups =
+    let
+        avGroups : Maybe (List String)
+        avGroups =
+            Maybe.map availableGroupNames maybeModel
+
+        addButton : List (H.Html Msg)
+        addButton =
+            case avGroups of
+                Nothing ->
+                    []
+
+                Just [] ->
+                    []
+
+                Just someGroups ->
+                    [ groupAddTag someGroups ]
+    in
+    H.div [] (List.map (groupTag (maybeIs maybeModel)) groups ++ addButton)
+
+
+groupTag : Bool -> String -> H.Html Msg
+groupTag dropable name =
+    let
+        dropper : List (H.Html Msg)
+        dropper =
+            if dropable then
+                [ W.Divider.view [ W.Divider.vertical, W.Divider.margins 3 ] []
+                , W.Button.view [ W.Button.invisible, W.Button.small, W.Button.icon ]
+                    { label = [ Icons.close [ Icons.size "1em" ] ], onClick = GroupDropClicked name }
+                ]
+
+            else
+                []
+    in
+    W.Tag.view groupTagAttrs ([ H.text name ] ++ dropper)
+
+
+groupTagAttrs : List (W.Tag.Attribute Msg)
+groupTagAttrs =
+    [ W.Tag.small True, W.Tag.htmlAttrs [ A.style "margin" "1px" ] ]
+
+
+groupAddTag : List String -> H.Html Msg
+groupAddTag groupNames =
+    W.Popover.view []
+        { content = [ groupAddMenu groupNames ]
+        , children = [ W.Tag.viewButton groupTagAttrs { onClick = NoOp, label = [ H.text "+" ] } ]
+        }
+
+
+groupAddMenu : List String -> H.Html Msg
+groupAddMenu groupNames =
+    W.Menu.view (List.map (\n -> W.Menu.viewButton [] { label = [ H.text n ], onClick = GroupAddClicked n }) groupNames)
+
+
+availableGroupNames : Model -> List String
+availableGroupNames model =
+    case model.allGroups of
+        RemoteData.Success groups ->
+            groups.groups
+                |> List.map .name
+                |> List.sort
+
+        _ ->
+            []

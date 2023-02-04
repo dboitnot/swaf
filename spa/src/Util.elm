@@ -5,6 +5,7 @@ module Util exposing
     , formatFileSize
     , httpErrorToString
     , maybeEmptyString
+    , maybeIs
     , sortBy
     )
 
@@ -38,6 +39,16 @@ boolToMaybe trueValue b =
 
     else
         Nothing
+
+
+maybeIs : Maybe a -> Bool
+maybeIs m =
+    case m of
+        Just _ ->
+            True
+
+        Nothing ->
+            False
 
 
 formatFileSize : Int -> String

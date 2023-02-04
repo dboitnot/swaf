@@ -2,6 +2,7 @@ module Icons exposing
     ( Attribute
     , Icon
     , accountCircle
+    , close
     , createNewFolder
     , download
     , downloadOff
@@ -184,6 +185,11 @@ accountCircle =
 createNewFolder : Icon msg
 createNewFolder =
     icon "create_new_folder"
+
+
+close : Icon msg
+close =
+    icon "close"
 
 
 download : Icon msg

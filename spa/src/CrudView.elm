@@ -1,4 +1,4 @@
-module CrudView exposing (Editing(..), ErrorMessage, crudView, editMap, isUpdating)
+module CrudView exposing (Editing(..), ErrorMessage, crudView, editMap, editingItem, isCreating, isUpdating)
 
 import Html as H
 import Http
@@ -61,6 +61,38 @@ isUpdating e =
             False
 
 
+isCreating : Editing o -> Bool
+isCreating e =
+    case e of
+        Creating _ ->
+            True
+
+        CreateLoading _ ->
+            True
+
+        _ ->
+            False
+
+
+editingItem : Editing o -> Maybe o
+editingItem e =
+    case e of
+        NotEditing ->
+            Nothing
+
+        Creating o ->
+            Just o
+
+        Updating o ->
+            Just o
+
+        CreateLoading o ->
+            Just o
+
+        UpdateLoading o ->
+            Just o
+
+
 type alias Conf o r msg =
     { user : User
     , title : String
@@ -68,6 +100,7 @@ type alias Conf o r msg =
     , itemListKey : r -> List o
     , listColumns : List (W.Table.Column msg o)
     , openItem : Editing o
+    , openItemIsValid : Bool
     , onListClick : o -> msg
     , editView : o -> H.Html msg
     , onSave : msg
@@ -84,6 +117,7 @@ crudView :
     , itemListKey : r -> List o
     , listColumns : List (W.Table.Column msg o)
     , openItem : Editing o
+    , openItemIsValid : Bool
     , onListClick : o -> msg
     , editView : o -> H.Html msg
     , onSave : msg
@@ -174,7 +208,8 @@ editButtonBar conf buttonsEnabled =
     W.Container.view [ W.Container.horizontal, W.Container.alignRight, W.Container.gap_4 ]
         (if buttonsEnabled then
             [ W.Button.view [] { label = [ H.text "Cancel" ], onClick = conf.onCancelEdit }
-            , W.Button.view [ W.Button.primary ] { label = [ H.text "Save" ], onClick = conf.onSave }
+            , W.Button.view [ W.Button.primary, W.Button.disabled (not conf.openItemIsValid) ]
+                { label = [ H.text "Save" ], onClick = conf.onSave }
             ]
 
          else
