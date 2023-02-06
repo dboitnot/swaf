@@ -1,0 +1,14 @@
+{
+    "name": "fullFileAccess",
+    "policy_statements": [
+    {
+      "effect": "Allow",
+      "actions": [
+          "file:*"
+      ],
+      "resources": [
+        "*"
+      ]
+    }
+  ]
+}

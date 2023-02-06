@@ -1,0 +1,14 @@
+{
+    "name": "admins",
+    "policy_statements": [
+    {
+      "effect": "Allow",
+      "actions": [
+        "*"
+      ],
+      "resources": [
+        "*"
+      ]
+    }
+  ]
+}

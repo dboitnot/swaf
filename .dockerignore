@@ -1,0 +1,6 @@
+repo
+spa/elm-stuff
+target/debug
+target/rls
+target/release/build
+target/release/deps

@@ -1,0 +1,17 @@
+{
+  "login_name": "root",
+  "full_name": "Super User",
+  "groups": [],
+  "policy_statements": [
+    {
+      "effect": "Allow",
+      "actions": [
+        "*"
+      ],
+      "resources": [
+        "*"
+      ]
+    }
+  ],
+  "password_hash": "$6$WBNcfEE95bAboH0j$5qrRpjmuAPHG75H.7h2p6QDoBpjoABhVeLI8Q6x1T23Ga87ZQzfDUXrNYoQrG7fpRGKL4/XShkm6E/JdA9Sd2."
+}
