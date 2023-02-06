@@ -6,4 +6,6 @@ use std::path::PathBuf;
 pub struct Config {
     pub file_root: PathBuf,
     pub policy_store_root: PathBuf,
+    pub hook_root: PathBuf,
+    pub hook_shell: String,
 }

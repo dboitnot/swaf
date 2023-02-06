@@ -4,3 +4,5 @@ limits = {file = "100MiB"}
 [debug]
 file_root = "repo/file_root"
 policy_store_root = "repo/policy"
+hook_root = "repo/hooks"
+hook_shell = "bash"

@@ -17,5 +17,5 @@ fi
 
 mkdir -p "$ROCKET_FILE_ROOT"
 
-cd /opt/swaf
+cd /swaf
 ./swaf

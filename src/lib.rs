@@ -22,6 +22,7 @@ use util::now_as_secs;
 mod auth;
 mod config;
 mod files;
+mod hook;
 mod meta;
 mod util;
 
@@ -188,13 +189,19 @@ async fn mkdir(
 
 #[put("/file/<_..>", data = "<file>")]
 async fn upload(
+    config: &State<Config>,
     path: RequestedFileDataWritable,
     mut file: TempFile<'_>,
 ) -> Result<&'static str, ()> {
-    file.move_copy_to(path.real_path)
-        .await
-        .map_err(|_| ())
-        .map(|_| "Ok")
+    file.move_copy_to(&path.real_path).await.map_err(|_| ())?;
+    hook::run_hooks(
+        &config.hook_shell,
+        &config.hook_root,
+        "after_upload",
+        vec![("HOOK_UPLOAD_REAL_PATH", &path.real_path)],
+    )
+    .map_err(|_| ())?;
+    Ok("Ok")
 }
 
 #[get("/meta/<_..>")]
