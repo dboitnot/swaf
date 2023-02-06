@@ -166,17 +166,21 @@ update sharedModel req msg model =
             )
 
         ChildClicked child ->
-            let
-                meta : WebData FileMetadata
-                meta =
-                    RemoteData.Success child.metadata
-            in
-            ( { model
-                | metadata = meta
-                , children = RemoteData.NotAsked
-              }
-            , pushPathThen req child.metadata.path (updateMetaCmd sharedModel meta)
-            )
+            if child.metadata.isDir then
+                let
+                    meta : WebData FileMetadata
+                    meta =
+                        RemoteData.Success child.metadata
+                in
+                ( { model
+                    | metadata = meta
+                    , children = RemoteData.NotAsked
+                  }
+                , pushPathThen req child.metadata.path (updateMetaCmd sharedModel meta)
+                )
+
+            else
+                ( model, download sharedModel child.metadata )
 
         ChildSelectionChanged child selected ->
             ( { model
@@ -189,7 +193,7 @@ update sharedModel req msg model =
             )
 
         DownloadClicked meta ->
-            ( model, Nav.load (sharedModel.baseUrl ++ "/api/file/" ++ meta.path) )
+            ( model, download sharedModel meta )
 
         UploadClicked ->
             ( model, Select.file [ "*/*" ] UploadSelected )
@@ -274,6 +278,11 @@ updateChildSelection child selected children =
                 c
         )
         children
+
+
+download : Shared.Model -> FileMetadata -> Cmd Msg
+download sharedModel meta =
+    Nav.load (sharedModel.baseUrl ++ "/api/file/" ++ meta.path)
 
 
 mkdirAccepted : Shared.Model -> Model -> ( Model, Cmd Msg )
