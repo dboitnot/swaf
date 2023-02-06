@@ -193,12 +193,19 @@ async fn get_file_children(children: FileChildren) -> Json<FileChildren> {
     Json(children)
 }
 
+// TODO: Add a configuration for the SPA root rather than relying on the CWD.
 #[get("/<file..>")]
 async fn spa_files(mut file: PathBuf) -> Option<NamedFile> {
     if file.components().count() < 1 {
         file.push("index.html");
     }
-    NamedFile::open(Path::new("spa/public/").join(file))
+    let path = Path::new("spa/public/").join(file);
+    if path.is_file() {
+        return NamedFile::open(path).await.ok();
+    }
+
+    // The SPA handles several URLs so return that if nothing matches.
+    NamedFile::open(Path::new("spa/public/index.html"))
         .await
         .ok()
 }
