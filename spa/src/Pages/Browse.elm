@@ -21,11 +21,24 @@ import Shared exposing (User)
 import Task
 import Time
 import Url.Builder exposing (relative)
-import Util exposing (authorizedUpdate, boolToMaybe, flattenMaybeList, formatFileSize, httpErrorToString, sortBy)
+import Util
+    exposing
+        ( authorizedUpdate
+        , boolToMaybe
+        , flattenMaybeList
+        , formatFileSize
+        , httpErrorToString
+        , pathJoin
+        , sortBy
+        , thenSortBy
+        )
 import View exposing (View)
 import W.Button
 import W.Container
 import W.InputCheckbox
+import W.InputField
+import W.InputText
+import W.Message
 import W.Modal
 import W.Table
 
@@ -44,6 +57,10 @@ type Msg
     | UploadFinished (Result Http.Error ())
     | UploadAcknowledged
     | MkdirClicked
+    | MkdirNameChanged String
+    | MkdirAccepted
+    | MkdirCancelled
+    | MkdirFinished (WebData String)
     | AdjustTimeZone Time.Zone
     | Tick Time.Posix
     | NoOp
@@ -78,6 +95,8 @@ type alias Model =
     , sortChildrenOn : ChildrenSortOn
     , uploadStatus : UploadStatus
     , uploadProgress : Maybe Http.Progress
+    , mkdirName : Maybe String
+    , mkdirStatus : WebData String
     }
 
 
@@ -102,6 +121,8 @@ init sharedModel req =
       , sortChildrenOn = Type
       , uploadStatus = NotUploading
       , uploadProgress = Nothing
+      , mkdirName = Nothing
+      , mkdirStatus = RemoteData.NotAsked
       }
     , Cmd.batch
         [ getMetadata sharedModel (req.query |> Dict.get "p" |> Maybe.withDefault "")
@@ -202,7 +223,36 @@ update sharedModel req msg model =
             ( { model | uploadStatus = NotUploading, uploadProgress = Nothing }, Cmd.none )
 
         MkdirClicked ->
-            ( model, Cmd.none )
+            ( { model | mkdirName = Just "", mkdirStatus = RemoteData.NotAsked }, Cmd.none )
+
+        MkdirNameChanged v ->
+            ( { model
+                | mkdirName =
+                    if (v == "") || validMkdirName v then
+                        Just v
+
+                    else
+                        model.mkdirName
+              }
+            , Cmd.none
+            )
+
+        MkdirAccepted ->
+            mkdirAccepted sharedModel model
+
+        MkdirCancelled ->
+            ( { model | mkdirName = Nothing }, Cmd.none )
+
+        MkdirFinished (RemoteData.Success _) ->
+            ( { model | mkdirName = Nothing }
+            , model.metadata
+                |> RemoteData.toMaybe
+                |> Maybe.map (\meta -> getChildren sharedModel meta.path)
+                |> Maybe.withDefault Cmd.none
+            )
+
+        MkdirFinished s ->
+            ( { model | mkdirStatus = s }, Cmd.none )
 
 
 pushPathThen : Request -> String -> Cmd Msg -> Cmd Msg
@@ -224,6 +274,17 @@ updateChildSelection child selected children =
                 c
         )
         children
+
+
+mkdirAccepted : Shared.Model -> Model -> ( Model, Cmd Msg )
+mkdirAccepted sharedModel model =
+    Maybe.map2 (mkdirAcceptedWith sharedModel model) (RemoteData.toMaybe model.metadata) model.mkdirName
+        |> Maybe.withDefault ( model, Cmd.none )
+
+
+mkdirAcceptedWith : Shared.Model -> Model -> FileMetadata -> String -> ( Model, Cmd Msg )
+mkdirAcceptedWith sharedModel model meta name =
+    ( { model | mkdirStatus = RemoteData.Loading }, mkdir sharedModel (pathJoin meta.path name) )
 
 
 wrapChildren : WebData FileChildren -> WebData Children
@@ -255,15 +316,15 @@ childSorter model =
                     sortBy fileNameOf
 
                 Type ->
-                    \a b ->
-                        if a.isDir && b.isDir then
-                            LT
+                    sortBy
+                        (\m ->
+                            if m.isDir then
+                                0
 
-                        else if not a.isDir && b.isDir then
-                            GT
-
-                        else
-                            compare (fileNameOf a) (fileNameOf b)
+                            else
+                                1
+                        )
+                        |> thenSortBy fileNameOf
     in
     List.sortWith (\a b -> cmp a.metadata b.metadata)
 
@@ -299,6 +360,19 @@ getChildren sharedModel dirPath =
     Http.get
         { url = sharedModel.baseUrl ++ "/api/ls/" ++ dirPath
         , expect = fileChildrenDecoder |> Http.expectJson (RemoteData.fromResult >> GotChildren)
+        }
+
+
+mkdir : Shared.Model -> String -> Cmd Msg
+mkdir sharedModel dirPath =
+    Http.request
+        { method = "PUT"
+        , headers = []
+        , url = sharedModel.baseUrl ++ "/api/mkdir/" ++ dirPath
+        , body = Http.emptyBody
+        , expect = Http.expectString (RemoteData.fromResult >> MkdirFinished)
+        , timeout = Nothing
+        , tracker = Nothing
         }
 
 
@@ -339,6 +413,7 @@ view user model =
         (flattenMaybeList
             [ Just (fileDisplay model)
             , uploadModal model
+            , mkdirView model
             ]
         )
 
@@ -639,6 +714,53 @@ uploadModalButton res =
             W.Button.view [ W.Button.warning ] { label = [ H.text "Ok" ], onClick = UploadAcknowledged }
 
 
+mkdirView : Model -> Maybe (H.Html Msg)
+mkdirView model =
+    Maybe.map (mkdirDialog model.mkdirStatus) model.mkdirName
+
+
+mkdirDialog : WebData String -> String -> H.Html Msg
+mkdirDialog status name =
+    let
+        okDisabled : Bool
+        okDisabled =
+            case status of
+                RemoteData.Loading ->
+                    True
+
+                _ ->
+                    not (validMkdirName name)
+    in
+    W.Modal.view []
+        { isOpen = True
+        , onClose = Nothing
+        , content =
+            [ W.InputField.view []
+                { label = [ H.text "Create a new directory:" ]
+                , input =
+                    [ W.InputText.view [] { onInput = MkdirNameChanged, value = name }
+                    , mkdirMessage status
+                    , W.Container.view [ W.Container.horizontal, W.Container.alignRight, W.Container.pad_2, W.Container.gap_2 ]
+                        [ W.Button.view [] { label = [ H.text "Cancel" ], onClick = MkdirCancelled }
+                        , W.Button.view [ W.Button.primary, W.Button.disabled okDisabled ]
+                            { label = [ H.text "Create" ], onClick = MkdirAccepted }
+                        ]
+                    ]
+                }
+            ]
+        }
+
+
+mkdirMessage : WebData String -> H.Html Msg
+mkdirMessage status =
+    case status of
+        RemoteData.Failure e ->
+            W.Message.view [ W.Message.danger ] [ H.text ("Error: " ++ httpErrorToString e) ]
+
+        _ ->
+            H.text ""
+
+
 
 -- SUBSCRIPTIONS
 
@@ -665,3 +787,8 @@ subscriptions model =
 fileNameOf : FileMetadata -> String
 fileNameOf meta =
     Maybe.withDefault "?" meta.fileName
+
+
+validMkdirName : String -> Bool
+validMkdirName name =
+    (String.length name > 0) && not (String.contains "/" name)

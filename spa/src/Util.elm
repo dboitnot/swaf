@@ -6,7 +6,9 @@ module Util exposing
     , httpErrorToString
     , maybeEmptyString
     , maybeIs
+    , pathJoin
     , sortBy
+    , thenSortBy
     )
 
 import Gen.Route
@@ -104,3 +106,26 @@ authorizedUpdate req mod res fnIfAuthorized =
 sortBy : (o -> comparable) -> (o -> o -> Order)
 sortBy fn =
     \a b -> compare (fn a) (fn b)
+
+
+thenSortBy : (o -> comparable) -> (o -> o -> Order) -> (o -> o -> Order)
+thenSortBy next first =
+    \a b ->
+        case first a b of
+            EQ ->
+                compare (next a) (next b)
+
+            e ->
+                e
+
+
+pathJoin : String -> String -> String
+pathJoin parent child =
+    if String.isEmpty parent then
+        child
+
+    else if String.endsWith "/" parent then
+        parent ++ child
+
+    else
+        parent ++ "/" ++ child

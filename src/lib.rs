@@ -12,6 +12,7 @@ use rocket::http::{Cookie, CookieJar, Status};
 use rocket::serde::json;
 use rocket::serde::json::Json;
 use rocket::serde::Serialize;
+use rocket::tokio::fs;
 use rocket::State;
 use rocket::{Build, Rocket};
 use std::io::ErrorKind;
@@ -172,6 +173,19 @@ async fn get_file_data(file: RequestedRegularFileDataReadable) -> Result<NamedFi
         })
 }
 
+#[put("/mkdir/<_..>")]
+async fn mkdir(
+    file: RequestedFileDataWritable,
+    auth: RequestAuthorizor,
+) -> Result<&'static str, Status> {
+    let parent_path = file.logical_path.parent().ok_or(Status::BadRequest)?;
+    auth.require("file:Write", &parent_path).ok()?;
+    fs::create_dir(file.real_path)
+        .await
+        .and(Ok("Ok"))
+        .or(Err(Status::InternalServerError))
+}
+
 #[put("/file/<_..>", data = "<file>")]
 async fn upload(
     path: RequestedFileDataWritable,
@@ -230,6 +244,7 @@ pub fn launch() -> Rocket<Build> {
                 get_file_data,
                 get_file_meta,
                 get_file_children,
+                mkdir,
                 upload,
                 user_list,
                 user_create,
