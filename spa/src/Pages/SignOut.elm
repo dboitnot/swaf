@@ -1,7 +1,9 @@
 module Pages.SignOut exposing (Model, Msg, page)
 
 import Gen.Params.SignOut exposing (Params)
+import Gen.Route as Route
 import Html as H
+import Html.Attributes as A
 import Http
 import Page
 import RemoteData exposing (WebData)
@@ -101,7 +103,9 @@ signOutView model =
             ]
 
         RemoteData.Success _ ->
-            [ H.text "You are now signed out." ]
+            [ H.p [] [ H.text "You are now signed out." ]
+            , H.p [] [ H.a [ A.href (Route.toHref Route.SignIn) ] [ H.text "Sign-In" ] ]
+            ]
 
 
 signOutSpinner : List (H.Html Msg)

@@ -51,7 +51,7 @@ update req msg model =
     case msg of
         SignIn user ->
             ( { model | user = Just user }
-            , if String.startsWith "/sign-in" model.reqUrl.path then
+            , if String.startsWith "/sign-" model.reqUrl.path then
                 Request.pushRoute Gen.Route.Browse req
 
               else
