@@ -5,6 +5,7 @@ use std::io;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+#[derive(Debug)]
 pub enum HookError {
     IoError(io::Error),
     BadExitStatus,
@@ -23,6 +24,7 @@ where
     let status = Command::new(shell)
         .env_remove("ROCKET_SECRET_KEY")
         .envs(envs)
+        .arg(path)
         .stdin(Stdio::null())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
@@ -71,11 +73,11 @@ where
         .map_err(HookError::IoError)?
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
-        .map(|e| dir.join(e.path()));
+        .map(|e| e.path());
     for path in paths {
         let res = run_hook(&shell, path, env.clone());
-        if res.is_err() {
-            warn!("Aborting further hook processing.");
+        if let Err(ref e) = res {
+            warn!("Hook error: {:?}\nAborting further hook processing.", e);
             return res;
         }
     }
