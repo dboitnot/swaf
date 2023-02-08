@@ -3,7 +3,7 @@ module Model exposing
     , FileMetadata
     , GroupInfo
     , GroupList
-    , PolicyEffect
+    , PolicyEffect(..)
     , PolicyStatement
     , UserInfo
     , UserList
