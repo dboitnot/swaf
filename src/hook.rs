@@ -4,10 +4,14 @@ use std::fs;
 use std::io;
 use std::path::Path;
 use std::process::{Command, Stdio};
+use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum HookError {
-    IoError(io::Error),
+    #[error("hook invocation failed")]
+    IoError(#[from] io::Error),
+
+    #[error("hook exited with non-zero status")]
     BadExitStatus,
 }
 
@@ -28,10 +32,8 @@ where
         .stdin(Stdio::null())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
-        .spawn()
-        .map_err(HookError::IoError)?
-        .wait()
-        .map_err(HookError::IoError)?;
+        .spawn()?
+        .wait()?;
     match status.code() {
         Some(0) => {
             info!("Hook {:?} exited with status: 0", path);
@@ -69,8 +71,7 @@ where
         debug!("No hook directory: {:?}", dir);
         return Ok(());
     };
-    let paths = fs::read_dir(&dir)
-        .map_err(HookError::IoError)?
+    let paths = fs::read_dir(&dir)?
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
         .map(|e| e.path());
