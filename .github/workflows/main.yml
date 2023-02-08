@@ -12,6 +12,9 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v3
 
+      - name: Install elm
+        run: npm install -y elm
+
       - name: Install pre-commit
         run: pip install pre-commit
 
