@@ -49,7 +49,7 @@ impl FilePolicyStore {
         } else {
             env::current_dir()
                 .map(|c| c.join(base_dir))
-                .map_err(|_| format!("Invalid policy_store_root: {:?}", base_dir))?
+                .map_err(|_| format!("Invalid policy_store_root: {base_dir:?}"))?
         };
         check_dir("base", &base_dir)?;
 
@@ -148,17 +148,13 @@ fn check_dir<P: AsRef<Path>>(desc: &str, path: P) -> Result<(), String> {
     //     .canonicalize()
     //     .map_err(|_| format!("FilePolicyStore {} path is non-canonical: {:?}", desc, path))?;
     if !path.exists() {
-        info!(
-            "FilePolicyStore {} directory does not exist. Creating: {:?}",
-            desc, path
-        );
+        info!("FilePolicyStore {desc} directory does not exist. Creating: {path:?}");
         fs::create_dir(path)
-            .map_err(|e| format!("Error creating FilePolicyStore {} directory: {:?}", desc, e))?;
+            .map_err(|e| format!("Error creating FilePolicyStore {desc} directory: {e:?}"))?;
     }
     if !path.is_dir() {
         return Err(format!(
-            "FilePolicyStore {} path is not a directory: {:?}",
-            desc, path
+            "FilePolicyStore {desc} path is not a directory: {path:?}"
         ));
     }
     Ok(())
@@ -174,13 +170,13 @@ fn with_file<O, T>(dir: &PathBuf, name: &'_ str, mode: OpenMode, op: O) -> Resul
 where
     O: FnOnce(&File) -> Result<T, String>,
 {
-    let file_name = format!("{}.json", name);
+    let file_name = format!("{name}.json");
     let path = dir.join(file_name);
     // let path = path
     //     .canonicalize()
     //     .map_err(|_| format!("Non-canonical data path: {:?}", path))?;
     if !path.starts_with(dir) {
-        return Err(format!("Invalid object path: {:?}", path));
+        return Err(format!("Invalid object path: {path:?}"));
     }
     let mut options = OpenOptions::new();
     let exclusive = match mode {
@@ -199,17 +195,17 @@ where
     };
     let file = options
         .open(&path)
-        .map_err(|e| format!("Error opening {:?}: {:?}", path, e))?;
+        .map_err(|e| format!("Error opening {path:?}: {e:?}"))?;
     if exclusive {
         file.try_lock_exclusive()
-            .map_err(|e| format!("Error locking {:?} exclusively: {:?}", path, e))?;
+            .map_err(|e| format!("Error locking {path:?} exclusively: {e:?}"))?;
     } else {
         file.lock_shared()
-            .map_err(|e| format!("Error locking {:?}: {:?}", path, e))?;
+            .map_err(|e| format!("Error locking {path:?}: {e:?}"))?;
     }
     let ret = op(&file);
     file.unlock()
-        .unwrap_or_else(|_| panic!("Failed to unlock {:?}", path));
+        .unwrap_or_else(|_| panic!("Failed to unlock {path:?}"));
     ret
 }
 
@@ -220,9 +216,8 @@ where
     let mut buf = String::new();
     with_file(dir, name, OpenMode::Read, |mut f| {
         f.read_to_string(&mut buf)
-            .map_err(|e| format!("Error reading {} in {:?}: {:?}", name, dir, e))?;
-        json::from_str(buf.as_str())
-            .map_err(|e| format!("Error decoding {} in {:?}: {:?}", name, dir, e))
+            .map_err(|e| format!("Error reading {name} in {dir:?}: {e:?}"))?;
+        json::from_str(buf.as_str()).map_err(|e| format!("Error decoding {name} in {dir:?}: {e:?}"))
     })
 }
 
@@ -237,9 +232,9 @@ where
     };
     with_file(dir, name, mode, |mut f| {
         let s = json::to_pretty_string(o)
-            .map_err(|e| format!("Error serializing {} in {:?}: {:?}", name, dir, e))?;
+            .map_err(|e| format!("Error serializing {name} in {dir:?}: {e:?}"))?;
         f.write(s.as_bytes())
-            .map_err(|e| format!("Error writing {} in {:?}: {:?}", name, dir, e))
+            .map_err(|e| format!("Error writing {name} in {dir:?}: {e:?}"))
             .map(|_| ())
     })
 }

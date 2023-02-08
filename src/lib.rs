@@ -118,7 +118,7 @@ fn user_set_password(
     } else {
         Some(password)
     };
-    auth.require("SetUserPassword", &format!("user:{}", login_name))
+    auth.require("SetUserPassword", &format!("user:{login_name}"))
         .ok()?;
     policy_store
         .set_user_password(login_name, password)
