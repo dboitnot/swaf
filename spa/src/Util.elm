@@ -1,6 +1,7 @@
 module Util exposing
     ( authorizedUpdate
     , boolToMaybe
+    , deleteInList
     , flattenMaybeList
     , formatFileSize
     , httpErrorToString
@@ -9,6 +10,7 @@ module Util exposing
     , pathJoin
     , sortBy
     , thenSortBy
+    , updateListAt
     )
 
 import Gen.Route
@@ -129,3 +131,23 @@ pathJoin parent child =
 
     else
         parent ++ "/" ++ child
+
+
+updateListAt : Int -> (a -> a) -> List a -> List a
+updateListAt idx fn l =
+    List.indexedMap
+        (\i v ->
+            if i == idx then
+                fn v
+
+            else
+                v
+        )
+        l
+
+
+deleteInList : Int -> List a -> List a
+deleteInList idx l =
+    List.indexedMap Tuple.pair l
+        |> List.filter (\( i, _ ) -> i /= idx)
+        |> List.map Tuple.second

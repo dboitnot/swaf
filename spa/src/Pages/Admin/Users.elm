@@ -6,20 +6,24 @@ import Html as H
 import Html.Attributes as A
 import Http
 import Icons
-import Model exposing (GroupList, UserInfo, UserList, groupListDecoder, userInfoEncoder, userListDecoder)
+import Model exposing (GroupList, PolicyStatement, UserInfo, UserList, groupListDecoder, userInfoEncoder, userListDecoder)
 import Page
 import PasswordReset as PR
+import PolicyEditor exposing (IndexedStatement)
+import PolicyTable
 import RemoteData exposing (WebData)
 import Request
 import Shared exposing (User)
 import Util
     exposing
         ( authorizedUpdate
+        , deleteInList
         , flattenMaybeList
         , httpErrorToString
         , maybeEmptyString
         , maybeIs
         , sortBy
+        , updateListAt
         )
 import View exposing (View)
 import W.Button
@@ -58,6 +62,7 @@ type alias Model =
     { users : WebData UserList
     , sortOn : SortOn
     , openUser : Editing UserInfo
+    , openStatement : IndexedStatement
     , errorMessage : Maybe (ErrorMessage Msg)
     , allGroups : WebData GroupList
     , pwResetModel : PR.Model
@@ -69,6 +74,7 @@ init sharedModel =
     ( { users = RemoteData.NotAsked
       , sortOn = Name
       , openUser = CrudView.NotEditing
+      , openStatement = PolicyEditor.None
       , errorMessage = Nothing
       , allGroups = RemoteData.NotAsked
       , pwResetModel = PR.newModel { forceChange = False }
@@ -90,6 +96,9 @@ type Msg
     | StringFieldEdited (UserInfo -> String -> UserInfo) String
     | GroupAddClicked String
     | GroupDropClicked String
+    | PolicyTableClicked Int PolicyStatement
+    | AddPolicyClicked
+    | PolicyEditorEvent PolicyEditor.Msg
     | EditSaveClicked
     | EditCancelled
     | UserUpdated (Result Http.Error ())
@@ -132,6 +141,15 @@ update sharedModel req msg model =
             , Cmd.none
             )
 
+        PolicyTableClicked idx stmt ->
+            ( { model | openStatement = PolicyEditor.At idx stmt }, Cmd.none )
+
+        PolicyEditorEvent e ->
+            ( policyEditorEvent model e, Cmd.none )
+
+        AddPolicyClicked ->
+            ( model, Cmd.none )
+
         EditSaveClicked ->
             editSaveClicked sharedModel model
 
@@ -165,6 +183,50 @@ startEditing model edit =
       }
     , Cmd.none
     )
+
+
+policyEditorEvent : Model -> PolicyEditor.Msg -> Model
+policyEditorEvent model msg =
+    let
+        save : IndexedStatement -> Model
+        save =
+            \s -> { model | openStatement = s }
+    in
+    case PolicyEditor.update model.openStatement msg of
+        PolicyEditor.NoResult ->
+            model
+
+        PolicyEditor.Updated s ->
+            save s
+
+        PolicyEditor.Saved ->
+            policyEditorOk model
+
+        PolicyEditor.Cancelled ->
+            save PolicyEditor.None
+
+        PolicyEditor.Deleted idx ->
+            { model
+                | openStatement = PolicyEditor.None
+                , openUser = editMap (\u _ -> { u | policyStatements = deleteInList idx u.policyStatements }) model.openUser ()
+            }
+
+
+policyEditorOk : Model -> Model
+policyEditorOk model =
+    case model.openStatement of
+        PolicyEditor.None ->
+            model
+
+        PolicyEditor.At idx stm ->
+            { model
+                | openStatement = PolicyEditor.None
+                , openUser =
+                    editMap
+                        (\u v -> { u | policyStatements = updateListAt idx (\_ -> v) u.policyStatements })
+                        model.openUser
+                        stm
+            }
 
 
 editSaveClicked : Shared.Model -> Model -> ( Model, Cmd Msg )
@@ -343,21 +405,40 @@ openItemIsValid model =
 editView : Model -> UserInfo -> H.Html Msg
 editView model user =
     W.Container.view [ W.Container.vertical ]
-        [ textInputField "Login Name"
+        ([ textInputField "Login Name"
             [ W.InputText.readOnly (isUpdating model.openUser) ]
             .loginName
             (\u v -> { u | loginName = v })
             loginNameValidationMessage
             user
-        , textInputField "Full Name"
+         , textInputField "Full Name"
             []
             (\u -> Maybe.withDefault "" u.fullName)
             (\u v -> { u | fullName = maybeEmptyString v })
             (always Nothing)
             user
-        , inputField "Password" (PR.view { wrapperMsg = PasswordMsg, model = model.pwResetModel })
-        , inputField "Groups" (groupList (Just model) user.groups)
-        ]
+         , inputField "Password" (PR.view { wrapperMsg = PasswordMsg, model = model.pwResetModel })
+         , inputField "Groups" (groupList (Just model) user.groups)
+         , inputField "Permissions"
+            (PolicyTable.view
+                { onClick = PolicyTableClicked
+                , onAdd = AddPolicyClicked
+                , policies = user.policyStatements
+                }
+            )
+         ]
+            ++ policyEditor model
+        )
+
+
+policyEditor : Model -> List (H.Html Msg)
+policyEditor model =
+    case model.openStatement of
+        PolicyEditor.None ->
+            []
+
+        PolicyEditor.At _ stm ->
+            [ PolicyEditor.view PolicyEditorEvent stm ]
 
 
 inputField : String -> H.Html Msg -> H.Html Msg

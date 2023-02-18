@@ -202,7 +202,7 @@ editView conf =
 
 editModal : Conf o r msg -> o -> Bool -> H.Html msg
 editModal conf o buttonsEnabled =
-    W.Modal.view []
+    W.Modal.view [ W.Modal.htmlAttrs [] ]
         { isOpen = True
         , onClose = Nothing
         , content =

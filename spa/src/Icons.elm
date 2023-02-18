@@ -2,6 +2,7 @@ module Icons exposing
     ( Attribute
     , Icon
     , accountCircle
+    , add
     , close
     , createNewFolder
     , download
@@ -180,6 +181,11 @@ fontVariationPart attrs key part =
 accountCircle : Icon msg
 accountCircle =
     icon "account_circle"
+
+
+add : Icon msg
+add =
+    icon "add"
 
 
 createNewFolder : Icon msg

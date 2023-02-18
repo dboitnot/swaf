@@ -11,6 +11,7 @@ module Model exposing
     , fileMetadataDecoder
     , groupInfoDecoder
     , groupListDecoder
+    , policyEffectToString
     , userInfoDecoder
     , userInfoEncoder
     , userListDecoder

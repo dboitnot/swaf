@@ -83,7 +83,7 @@ impl RequestAuthorizor {
     ) -> bool {
         let resource_id = resource.to_resource_id();
         if resource_id.is_none() {
-            warn!("Error extracting ID from resource: {:?}", resource);
+            warn!("Error extracting ID from resource: {resource:?}");
             return false;
         }
         let resource_id = resource_id.unwrap();
