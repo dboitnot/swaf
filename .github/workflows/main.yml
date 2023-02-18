@@ -13,7 +13,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Install elm
-        run: npm install -y elm
+        run: npm install -y elm elm-format
 
       - name: Generate elm-spa (needed for pre-commit checks)
         run: |
