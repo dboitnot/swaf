@@ -15,6 +15,12 @@ jobs:
       - name: Install elm
         run: npm install -y elm
 
+      - name: Generate elm-spa (needed for pre-commit checks)
+        run: |
+          pushd spa
+          npx -y elm-spa gen
+          popd
+
       - name: Install pre-commit
         run: pip install pre-commit
 
