@@ -1,5 +1,6 @@
-module CrudView exposing (Editing(..), ErrorMessage, crudView, editMap, editingItem, isCreating, isUpdating)
+module CrudView exposing (ErrorMessage, crudView)
 
+import Editing exposing (Editing(..))
 import Html as H
 import Http
 import Icons
@@ -21,76 +22,6 @@ type alias ErrorMessage msg =
     , message : String
     , onAck : msg
     }
-
-
-type Editing o
-    = NotEditing
-    | Creating o
-    | Updating o
-    | CreateLoading o
-    | UpdateLoading o
-
-
-editMap : (o -> v -> o) -> Editing o -> v -> Editing o
-editMap fn e v =
-    case e of
-        NotEditing ->
-            NotEditing
-
-        Creating o ->
-            Creating (fn o v)
-
-        Updating o ->
-            Updating (fn o v)
-
-        -- Deny mutation while waiting for server
-        _ ->
-            e
-
-
-isUpdating : Editing o -> Bool
-isUpdating e =
-    case e of
-        Updating _ ->
-            True
-
-        UpdateLoading _ ->
-            True
-
-        _ ->
-            False
-
-
-isCreating : Editing o -> Bool
-isCreating e =
-    case e of
-        Creating _ ->
-            True
-
-        CreateLoading _ ->
-            True
-
-        _ ->
-            False
-
-
-editingItem : Editing o -> Maybe o
-editingItem e =
-    case e of
-        NotEditing ->
-            Nothing
-
-        Creating o ->
-            Just o
-
-        Updating o ->
-            Just o
-
-        CreateLoading o ->
-            Just o
-
-        UpdateLoading o ->
-            Just o
 
 
 type alias Conf o r msg =

@@ -1,6 +1,7 @@
 module Pages.Admin.Users exposing (Model, Msg, SortOn, page)
 
-import CrudView exposing (Editing, ErrorMessage, crudView, editMap, editingItem, isCreating, isUpdating)
+import CrudView exposing (ErrorMessage, crudView)
+import Editing exposing (Editing(..), isCreating, isUpdating)
 import Gen.Params.Admin.Users exposing (Params)
 import Html as H
 import Html.Attributes as A
@@ -73,7 +74,7 @@ init : Shared.Model -> ( Model, Cmd Msg )
 init sharedModel =
     ( { users = RemoteData.NotAsked
       , sortOn = Name
-      , openUser = CrudView.NotEditing
+      , openUser = NotEditing
       , openStatement = PolicyEditor.None
       , errorMessage = Nothing
       , allGroups = RemoteData.NotAsked
@@ -93,7 +94,7 @@ type Msg
     | GotGroups (WebData GroupList)
     | CreateClicked
     | UserClicked UserInfo
-    | StringFieldEdited (UserInfo -> String -> UserInfo) String
+    | StringFieldEdited (String -> UserInfo -> UserInfo) String
     | GroupAddClicked String
     | GroupDropClicked String
     | PolicyTableClicked Int PolicyStatement
@@ -120,24 +121,24 @@ update sharedModel req msg model =
             ( { model | allGroups = groups }, Cmd.none )
 
         CreateClicked ->
-            startEditing model (CrudView.Creating { loginName = "", fullName = Nothing, groups = [], policyStatements = [] })
+            startEditing model (Creating { loginName = "", fullName = Nothing, groups = [], policyStatements = [] })
 
         UserClicked user ->
             ( { model
-                | openUser = CrudView.Updating user
-                , pwResetModel = PR.newModel { forceChange = isCreating model.openUser }
+                | openUser = Updating user
+                , pwResetModel = PR.newModel { forceChange = Editing.isCreating model.openUser }
               }
             , Cmd.none
             )
 
         StringFieldEdited fn v ->
-            ( { model | openUser = editMap fn model.openUser v }, Cmd.none )
+            ( { model | openUser = Editing.map (fn v) model.openUser }, Cmd.none )
 
         GroupAddClicked groupName ->
-            ( { model | openUser = editMap (\u v -> { u | groups = u.groups ++ [ v ] }) model.openUser groupName }, Cmd.none )
+            ( { model | openUser = Editing.map (\u -> { u | groups = u.groups ++ [ groupName ] }) model.openUser }, Cmd.none )
 
         GroupDropClicked name ->
-            ( { model | openUser = editMap (\u v -> { u | groups = List.filter (\n -> n /= v) u.groups }) model.openUser name }
+            ( { model | openUser = Editing.map (\u -> { u | groups = List.filter (\n -> n /= name) u.groups }) model.openUser }
             , Cmd.none
             )
 
@@ -154,7 +155,7 @@ update sharedModel req msg model =
             editSaveClicked sharedModel model
 
         EditCancelled ->
-            ( { model | openUser = CrudView.NotEditing }, Cmd.none )
+            ( { model | openUser = NotEditing }, Cmd.none )
 
         UserUpdated (Ok _) ->
             userUpdatedSuccess sharedModel model
@@ -208,7 +209,7 @@ policyEditorEvent model msg =
         PolicyEditor.Deleted idx ->
             { model
                 | openStatement = PolicyEditor.None
-                , openUser = editMap (\u _ -> { u | policyStatements = deleteInList idx u.policyStatements }) model.openUser ()
+                , openUser = Editing.map (\u -> { u | policyStatements = deleteInList idx u.policyStatements }) model.openUser
             }
 
 
@@ -222,21 +223,20 @@ policyEditorOk model =
             { model
                 | openStatement = PolicyEditor.None
                 , openUser =
-                    editMap
-                        (\u v -> { u | policyStatements = updateListAt idx (\_ -> v) u.policyStatements })
+                    Editing.map
+                        (\u -> { u | policyStatements = updateListAt idx (always stm) u.policyStatements })
                         model.openUser
-                        stm
             }
 
 
 editSaveClicked : Shared.Model -> Model -> ( Model, Cmd Msg )
 editSaveClicked sharedModel model =
     case model.openUser of
-        CrudView.Creating user ->
-            ( { model | openUser = CrudView.CreateLoading user }, createUser sharedModel user )
+        Creating user ->
+            ( { model | openUser = CreateLoading user }, createUser sharedModel user )
 
-        CrudView.Updating user ->
-            ( { model | openUser = CrudView.UpdateLoading user }, updateUser sharedModel user )
+        Updating user ->
+            ( { model | openUser = UpdateLoading user }, updateUser sharedModel user )
 
         _ ->
             ( model, Cmd.none )
@@ -248,7 +248,7 @@ userUpdatedSuccess sharedModel model =
         up : Maybe ( UserInfo, String )
         up =
             Maybe.map2 (\u p -> ( u, p ))
-                (editingItem model.openUser)
+                (Editing.item model.openUser)
                 (PR.valid model.pwResetModel)
     in
     case up of
@@ -261,7 +261,7 @@ userUpdatedSuccess sharedModel model =
 
 editComplete : Shared.Model -> Model -> ( Model, Cmd Msg )
 editComplete sharedModel model =
-    ( { model | openUser = CrudView.NotEditing }, getUsers sharedModel )
+    ( { model | openUser = NotEditing }, getUsers sharedModel )
 
 
 updateError : Model -> String -> Http.Error -> ( Model, Cmd Msg )
@@ -393,7 +393,7 @@ loginNameValidationMessage name =
 
 openItemIsValid : Model -> Bool
 openItemIsValid model =
-    (editingItem model.openUser
+    (Editing.item model.openUser
         |> Maybe.map .loginName
         |> Maybe.andThen loginNameValidationMessage
         |> maybeIs
@@ -408,13 +408,13 @@ editView model user =
         ([ textInputField "Login Name"
             [ W.InputText.readOnly (isUpdating model.openUser) ]
             .loginName
-            (\u v -> { u | loginName = v })
+            (\v u -> { u | loginName = v })
             loginNameValidationMessage
             user
          , textInputField "Full Name"
             []
             (\u -> Maybe.withDefault "" u.fullName)
-            (\u v -> { u | fullName = maybeEmptyString v })
+            (\v u -> { u | fullName = maybeEmptyString v })
             (always Nothing)
             user
          , inputField "Password" (PR.view { wrapperMsg = PasswordMsg, model = model.pwResetModel })
@@ -463,7 +463,7 @@ textInputField :
     String
     -> List (W.InputText.Attribute Msg)
     -> (UserInfo -> String)
-    -> (UserInfo -> String -> UserInfo)
+    -> (String -> UserInfo -> UserInfo)
     -> (String -> Maybe String)
     -> UserInfo
     -> H.Html Msg
