@@ -7,7 +7,10 @@ import Html as H
 import Html.Attributes as A
 import Http
 import Icons
-import Model exposing (GroupList, PolicyStatement, UserInfo, UserList, groupListDecoder, userInfoEncoder, userListDecoder)
+import Model.GroupList as GroupList exposing (GroupList)
+import Model.PolicyStatement exposing (PolicyStatement)
+import Model.UserInfo as UserInfo exposing (UserInfo)
+import Model.UserList as UserList exposing (UserList)
 import Page
 import PasswordReset as PR
 import PolicyEditor exposing (IndexedStatement)
@@ -303,7 +306,7 @@ getUsers : Shared.Model -> Cmd Msg
 getUsers sharedModel =
     Http.get
         { url = sharedModel.baseUrl ++ "/api/users"
-        , expect = userListDecoder |> Http.expectJson (RemoteData.fromResult >> GotUsers)
+        , expect = UserList.decoder |> Http.expectJson (RemoteData.fromResult >> GotUsers)
         }
 
 
@@ -311,7 +314,7 @@ getGroups : Shared.Model -> Cmd Msg
 getGroups sharedModel =
     Http.get
         { url = sharedModel.baseUrl ++ "/api/groups"
-        , expect = groupListDecoder |> Http.expectJson (RemoteData.fromResult >> GotGroups)
+        , expect = GroupList.decoder |> Http.expectJson (RemoteData.fromResult >> GotGroups)
         }
 
 
@@ -321,7 +324,7 @@ createUser sharedModel user =
         { url = sharedModel.baseUrl ++ "/api/user"
         , method = "PUT"
         , headers = []
-        , body = Http.jsonBody (userInfoEncoder user)
+        , body = Http.jsonBody (UserInfo.encoder user)
         , expect = Http.expectWhatever UserUpdated
         , timeout = Nothing
         , tracker = Nothing
@@ -332,7 +335,7 @@ updateUser : Shared.Model -> UserInfo -> Cmd Msg
 updateUser sharedModel user =
     Http.post
         { url = sharedModel.baseUrl ++ "/api/user"
-        , body = Http.jsonBody (userInfoEncoder user)
+        , body = Http.jsonBody (UserInfo.encoder user)
         , expect = Http.expectWhatever UserUpdated
         }
 

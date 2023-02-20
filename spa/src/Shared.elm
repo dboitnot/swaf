@@ -11,7 +11,7 @@ module Shared exposing
 import Browser.Navigation as Nav
 import Gen.Route
 import Json.Decode as Json
-import Model exposing (UserInfo)
+import Model.UserInfo exposing (UserInfo)
 import Request exposing (Request)
 import Url exposing (Url)
 

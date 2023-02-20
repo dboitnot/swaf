@@ -12,7 +12,8 @@ import Html.Events as E
 import Http
 import Icons as I
 import Layout exposing (layout)
-import Model exposing (FileChildren, FileMetadata, fileChildrenDecoder, fileMetadataDecoder)
+import Model.FileChildren as FileChildren exposing (FileChildren)
+import Model.FileMetadata as FileMetadata exposing (FileMetadata)
 import Page
 import RemoteData exposing (WebData)
 import Request exposing (Request)
@@ -360,7 +361,7 @@ getMetadata : Shared.Model -> String -> Cmd Msg
 getMetadata sharedModel filePath =
     Http.get
         { url = sharedModel.baseUrl ++ "/api/meta/" ++ filePath
-        , expect = fileMetadataDecoder |> Http.expectJson (RemoteData.fromResult >> GotMetadata)
+        , expect = FileMetadata.decoder |> Http.expectJson (RemoteData.fromResult >> GotMetadata)
         }
 
 
@@ -368,7 +369,7 @@ getChildren : Shared.Model -> String -> Cmd Msg
 getChildren sharedModel dirPath =
     Http.get
         { url = sharedModel.baseUrl ++ "/api/ls/" ++ dirPath
-        , expect = fileChildrenDecoder |> Http.expectJson (RemoteData.fromResult >> GotChildren)
+        , expect = FileChildren.decoder |> Http.expectJson (RemoteData.fromResult >> GotChildren)
         }
 
 

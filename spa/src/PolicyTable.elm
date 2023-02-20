@@ -1,7 +1,8 @@
 module PolicyTable exposing (view)
 
 import Html as H
-import Model exposing (PolicyStatement, policyEffectToString)
+import Model.PolicyEffect as PolicyEffect
+import Model.PolicyStatement exposing (PolicyStatement)
 import W.Button
 import W.Container
 import W.Table
@@ -17,7 +18,7 @@ view conf =
     W.Container.view [ W.Container.vertical ]
         [ W.Table.view
             [ W.Table.onClick (\t -> conf.onClick (Tuple.first t) (Tuple.second t)) ]
-            [ W.Table.string [] { label = "Effect", value = \t -> Tuple.second t |> .effect |> policyEffectToString }
+            [ W.Table.string [] { label = "Effect", value = \t -> Tuple.second t |> .effect |> PolicyEffect.toString }
             , stringListColumn "Actions" .actions
             , stringListColumn "Resources" .resources
             ]

@@ -1,7 +1,8 @@
 module PolicyEditor exposing (IndexedStatement(..), Msg(..), UpdateResult(..), update, view)
 
 import Html as H
-import Model exposing (PolicyEffect, PolicyStatement, policyEffectToString)
+import Model.PolicyEffect as PolicyEffect exposing (PolicyEffect(..))
+import Model.PolicyStatement exposing (PolicyStatement)
 import W.Button
 import W.Container
 import W.InputField
@@ -98,9 +99,9 @@ view wrapperMsg stmt =
                 [ W.InputRadio.view []
                     { id = "policyStatementEffect"
                     , value = stmt.effect
-                    , options = [ Model.Allow, Model.Deny ]
-                    , toValue = policyEffectToString
-                    , toLabel = policyEffectToString
+                    , options = [ Allow, Deny ]
+                    , toValue = PolicyEffect.toString
+                    , toLabel = PolicyEffect.toString
                     , onInput = \e -> wrapperMsg (EffectChanged e)
                     }
                 , stringListView "Actions" ActionsChanged wrapperMsg stmt.actions

@@ -4,7 +4,7 @@ import Effect exposing (Effect)
 import Gen.Params.SignIn exposing (Params)
 import Html as H
 import Http
-import Model exposing (UserInfo, userInfoDecoder)
+import Model.UserInfo as UserInfo exposing (UserInfo)
 import Page
 import RemoteData exposing (WebData)
 import Request
@@ -92,7 +92,7 @@ sendGetUser : Shared.Model -> Cmd Msg
 sendGetUser sharedModel =
     Http.get
         { url = sharedModel.baseUrl ++ "/api/user/current"
-        , expect = userInfoDecoder |> Http.expectJson (RemoteData.fromResult >> GetUserResponse)
+        , expect = UserInfo.decoder |> Http.expectJson (RemoteData.fromResult >> GetUserResponse)
         }
 
 
@@ -109,7 +109,7 @@ sendSignIn sharedModel model =
                     [ Http.stringPart "login_name" (Maybe.withDefault "" model.username)
                     , Http.stringPart "password" (Maybe.withDefault "" model.password)
                     ]
-            , expect = userInfoDecoder |> Http.expectJson (RemoteData.fromResult >> SignInResponse)
+            , expect = UserInfo.decoder |> Http.expectJson (RemoteData.fromResult >> SignInResponse)
             }
 
 
