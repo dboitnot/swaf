@@ -1,6 +1,7 @@
 module Pages.Browse exposing (Child, Children, ChildrenSortOn, Model, Msg, UploadStatus, page)
 
 import Browser.Navigation as Nav
+import Cmd.Extra exposing (withCmd, withNoCmd)
 import DateFormat
 import Dict
 import File exposing (File)
@@ -141,13 +142,13 @@ update : Shared.Model -> Request -> Msg -> Model -> ( Model, Cmd Msg )
 update sharedModel req msg model =
     case msg of
         NoOp ->
-            ( model, Cmd.none )
+            model |> withNoCmd
 
         AdjustTimeZone newZone ->
-            ( { model | timeZone = newZone }, Cmd.none )
+            { model | timeZone = newZone } |> withNoCmd
 
         Tick newTime ->
-            ( { model | time = newTime }, Cmd.none )
+            { model | time = newTime } |> withNoCmd
 
         GotMetadata meta ->
             authorizedUpdate req model meta (\_ -> ( { model | metadata = meta }, updateMetaCmd sharedModel meta ))
@@ -156,7 +157,7 @@ update sharedModel req msg model =
             authorizedUpdate req
                 model
                 children
-                (\_ -> ( { model | children = children |> wrapChildren |> sortChildren model }, Cmd.none ))
+                (\_ -> { model | children = children |> wrapChildren |> sortChildren model } |> withNoCmd)
 
         CrumbClicked path ->
             ( { model
@@ -203,7 +204,7 @@ update sharedModel req msg model =
             upload sharedModel model file
 
         UploadProgress progress ->
-            ( { model | uploadProgress = Just progress }, Cmd.none )
+            { model | uploadProgress = Just progress } |> withNoCmd
 
         UploadCancelled ->
             ( { model | uploadStatus = NotUploading, uploadProgress = Nothing }
@@ -218,17 +219,18 @@ update sharedModel req msg model =
         UploadFinished res ->
             case model.uploadStatus of
                 Uploading fileName ->
-                    ( { model | uploadStatus = UploadComplete fileName res, uploadProgress = Nothing }, Cmd.none )
+                    { model | uploadStatus = UploadComplete fileName res, uploadProgress = Nothing }
+                        |> withCmd (refresh sharedModel model)
 
                 -- This shouldn't happen
                 _ ->
-                    ( { model | uploadStatus = NotUploading, uploadProgress = Nothing }, Cmd.none )
+                    { model | uploadStatus = NotUploading, uploadProgress = Nothing } |> withNoCmd
 
         UploadAcknowledged ->
-            ( { model | uploadStatus = NotUploading, uploadProgress = Nothing }, Cmd.none )
+            { model | uploadStatus = NotUploading, uploadProgress = Nothing } |> withNoCmd
 
         MkdirClicked ->
-            ( { model | mkdirName = Just "", mkdirStatus = RemoteData.NotAsked }, Cmd.none )
+            { model | mkdirName = Just "", mkdirStatus = RemoteData.NotAsked } |> withNoCmd
 
         MkdirNameChanged v ->
             ( { model
@@ -246,18 +248,22 @@ update sharedModel req msg model =
             mkdirAccepted sharedModel model
 
         MkdirCancelled ->
-            ( { model | mkdirName = Nothing }, Cmd.none )
+            { model | mkdirName = Nothing } |> withNoCmd
 
         MkdirFinished (RemoteData.Success _) ->
-            ( { model | mkdirName = Nothing }
-            , model.metadata
-                |> RemoteData.toMaybe
-                |> Maybe.map (\meta -> getChildren sharedModel meta.path)
-                |> Maybe.withDefault Cmd.none
-            )
+            { model | mkdirName = Nothing }
+                |> withCmd (refresh sharedModel model)
 
         MkdirFinished s ->
-            ( { model | mkdirStatus = s }, Cmd.none )
+            { model | mkdirStatus = s } |> withNoCmd
+
+
+refresh : Shared.Model -> Model -> Cmd Msg
+refresh sharedModel model =
+    model.metadata
+        |> RemoteData.toMaybe
+        |> Maybe.map (\meta -> getChildren sharedModel meta.path)
+        |> Maybe.withDefault Cmd.none
 
 
 pushPathThen : Request -> String -> Cmd Msg -> Cmd Msg

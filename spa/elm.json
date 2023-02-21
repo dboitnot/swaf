@@ -8,6 +8,7 @@
     "elm-version": "0.19.1",
     "dependencies": {
         "direct": {
+            "Janiczek/cmd-extra": "1.1.0",
             "NoRedInk/elm-json-decode-pipeline": "1.0.1",
             "danhandrea/elm-date-format": "2.0.2",
             "elm/browser": "1.0.2",
