@@ -399,7 +399,7 @@ upload sharedModel model file =
             , Http.request
                 { method = "PUT"
                 , headers = []
-                , url = sharedModel.baseUrl ++ "/api/file" ++ meta.path ++ "/" ++ fileName
+                , url = sharedModel.baseUrl ++ "/api/file/" ++ meta.path ++ "/" ++ fileName
                 , body = Http.fileBody file
                 , expect = Http.expectWhatever UploadFinished
                 , timeout = Nothing
