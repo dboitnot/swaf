@@ -3,7 +3,8 @@ module ModelTests exposing (suite)
 import Expect
 import Json.Decode as Decode
 import Json.Encode exposing (Value)
-import Model exposing (UserInfo)
+import Model.PolicyEffect exposing (PolicyEffect(..))
+import Model.UserInfo as UserInfo exposing (UserInfo)
 import Test exposing (Test, describe, test)
 
 
@@ -17,7 +18,7 @@ userA =
     , fullName = Just "User A"
     , groups = [ "groupa", "groupb" ]
     , policyStatements =
-        [ { effect = Model.Allow
+        [ { effect = Allow
           , actions = [ "*" ]
           , resources = [ "*" ]
           }
@@ -34,11 +35,11 @@ suite =
                     let
                         encoded : Value
                         encoded =
-                            Model.userInfoEncoder userA
+                            UserInfo.encoder userA
 
                         decoded : Result Decode.Error UserInfo
                         decoded =
-                            Decode.decodeValue Model.userInfoDecoder encoded
+                            Decode.decodeValue UserInfo.decoder encoded
                     in
                     Expect.equal (Ok userA) decoded
             ]
