@@ -43,21 +43,18 @@ update istm msg =
     in
     case msg of
         EffectChanged e ->
-            -- updated { stmt | effect = e }
             intoStm
                 |> I.thenInto PolicyStatement.effect
                 |> I.set e
                 |> Updated
 
         ActionsChanged s ->
-            -- updated { stmt | actions = String.lines s }
             intoStm
                 |> I.thenInto PolicyStatement.actions
                 |> I.set (String.lines s)
                 |> Updated
 
         ResourcesChanged s ->
-            -- updated { stmt | resources = String.lines s }
             intoStm
                 |> I.thenInto PolicyStatement.resources
                 |> I.set (String.lines s)
@@ -75,7 +72,6 @@ update istm msg =
             Cancelled
 
         DeleteClicked ->
-            -- Deleted idx
             I.into istm
                 |> I.thenInto Indexed.indexOpt
                 |> I.value
@@ -111,9 +107,14 @@ view wrapperMsg stmt =
                     }
                 , stringListView "Actions" ActionsChanged wrapperMsg stmt.actions
                 , stringListView "Resources" ResourcesChanged wrapperMsg stmt.resources
-                , W.Container.view [ W.Container.horizontal, W.Container.alignRight, W.Container.gap_2 ]
-                    [ W.Button.view [] { label = [ H.text "Cancel" ], onClick = wrapperMsg CancelClicked }
-                    , W.Button.view [ W.Button.primary ] { label = [ H.text "Ok" ], onClick = wrapperMsg OkClicked }
+                , W.Container.view [ W.Container.horizontal, W.Container.spaceBetween ]
+                    [ W.Button.view
+                        [ W.Button.danger ]
+                        { label = [ H.text "Delete" ], onClick = wrapperMsg DeleteClicked }
+                    , W.Container.view [ W.Container.horizontal, W.Container.alignRight, W.Container.gap_2 ]
+                        [ W.Button.view [] { label = [ H.text "Cancel" ], onClick = wrapperMsg CancelClicked }
+                        , W.Button.view [ W.Button.primary ] { label = [ H.text "Ok" ], onClick = wrapperMsg OkClicked }
+                        ]
                     ]
                 ]
             ]
