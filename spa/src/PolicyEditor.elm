@@ -1,8 +1,10 @@
-module PolicyEditor exposing (IndexedStatement(..), Msg(..), UpdateResult(..), update, view)
+module PolicyEditor exposing (IndexedStatement, Msg(..), UpdateResult(..), update, view)
 
 import Html as H
+import Indexed
+import Into as I
 import Model.PolicyEffect as PolicyEffect exposing (PolicyEffect(..))
-import Model.PolicyStatement exposing (PolicyStatement)
+import Model.PolicyStatement as PolicyStatement exposing (PolicyStatement)
 import W.Button
 import W.Container
 import W.InputField
@@ -26,47 +28,45 @@ type UpdateResult
     | Saved
     | Cancelled
     | Deleted Int
-    | NoResult
 
 
-type IndexedStatement
-    = None
-    | At Int PolicyStatement
+type alias IndexedStatement =
+    Indexed PolicyStatement
 
 
 update : IndexedStatement -> Msg -> UpdateResult
 update istm msg =
-    case istm of
-        None ->
-            NoResult
-
-        At i s ->
-            doUpdate msg i s
-
-
-doUpdate : Msg -> Int -> PolicyStatement -> UpdateResult
-doUpdate msg idx stmt =
     let
-        indexed : PolicyStatement -> IndexedStatement
-        indexed =
-            At idx
-
-        updated : PolicyStatement -> UpdateResult
-        updated =
-            \s -> Updated (indexed s)
+        intoStm : I.Zipper PolicyStatement IndexedStatement
+        intoStm =
+            I.into istm |> I.thenInto Indexed.itemOpt
     in
     case msg of
         EffectChanged e ->
-            updated { stmt | effect = e }
+            -- updated { stmt | effect = e }
+            intoStm
+                |> I.thenInto PolicyStatement.effect
+                |> I.set e
+                |> Updated
 
         ActionsChanged s ->
-            updated { stmt | actions = String.lines s }
+            -- updated { stmt | actions = String.lines s }
+            intoStm
+                |> I.thenInto PolicyStatement.actions
+                |> I.set (String.lines s)
+                |> Updated
 
         ResourcesChanged s ->
-            updated { stmt | resources = String.lines s }
+            -- updated { stmt | resources = String.lines s }
+            intoStm
+                |> I.thenInto PolicyStatement.resources
+                |> I.set (String.lines s)
+                |> Updated
 
         InputBlurred ->
-            cleanStatement stmt |> updated
+            intoStm
+                |> I.map cleanStatement
+                |> Updated
 
         OkClicked ->
             Saved
@@ -75,7 +75,12 @@ doUpdate msg idx stmt =
             Cancelled
 
         DeleteClicked ->
-            Deleted idx
+            -- Deleted idx
+            I.into istm
+                |> I.thenInto Indexed.indexOpt
+                |> I.value
+                |> Maybe.map Deleted
+                |> Maybe.withDefault Cancelled
 
 
 cleanStatement : PolicyStatement -> PolicyStatement

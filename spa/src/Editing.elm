@@ -1,4 +1,6 @@
-module Editing exposing (Editing(..), isCreating, isUpdating, item, map)
+module Editing exposing (Editing(..), isCreating, isUpdating, item, itemOpt, map)
+
+import Into exposing (Into(..))
 
 
 type Editing o
@@ -69,3 +71,21 @@ item e =
 
         UpdateLoading o ->
             Just o
+
+
+itemOpt : Into (Editing o) o
+itemOpt =
+    let
+        set : o -> Editing o -> Editing o
+        set o e =
+            case e of
+                Creating _ ->
+                    Creating o
+
+                Updating _ ->
+                    Updating o
+
+                _ ->
+                    e
+    in
+    Optional item set

@@ -1,5 +1,6 @@
 module Pages.Admin.Users exposing (Model, Msg, SortOn, page)
 
+import Cmd.Extra exposing (withNoCmd)
 import CrudView exposing (ErrorMessage, crudView)
 import Editing exposing (Editing(..), isCreating, isUpdating)
 import Gen.Params.Admin.Users exposing (Params)
@@ -7,8 +8,10 @@ import Html as H
 import Html.Attributes as A
 import Http
 import Icons
+import Indexed
+import Into as I exposing (Into(..))
 import Model.GroupList as GroupList exposing (GroupList)
-import Model.PolicyStatement exposing (PolicyStatement)
+import Model.PolicyStatement as PolicyStatement exposing (PolicyStatement)
 import Model.UserInfo as UserInfo exposing (UserInfo)
 import Model.UserList as UserList exposing (UserList)
 import Page
@@ -73,12 +76,17 @@ type alias Model =
     }
 
 
+openUser : Into Model (Editing UserInfo)
+openUser =
+    Lens .openUser (\e m -> { m | openUser = e })
+
+
 init : Shared.Model -> ( Model, Cmd Msg )
 init sharedModel =
     ( { users = RemoteData.NotAsked
       , sortOn = Name
       , openUser = NotEditing
-      , openStatement = PolicyEditor.None
+      , openStatement = Indexed.None
       , errorMessage = Nothing
       , allGroups = RemoteData.NotAsked
       , pwResetModel = PR.newModel { forceChange = False }
@@ -127,32 +135,31 @@ update sharedModel req msg model =
             startEditing model (Creating { loginName = "", fullName = Nothing, groups = [], policyStatements = [] })
 
         UserClicked user ->
-            ( { model
+            { model
                 | openUser = Updating user
                 , pwResetModel = PR.newModel { forceChange = Editing.isCreating model.openUser }
-              }
-            , Cmd.none
-            )
+            }
+                |> withNoCmd
 
         StringFieldEdited fn v ->
-            ( { model | openUser = Editing.map (fn v) model.openUser }, Cmd.none )
+            { model | openUser = Editing.map (fn v) model.openUser } |> withNoCmd
 
         GroupAddClicked groupName ->
-            ( { model | openUser = Editing.map (\u -> { u | groups = u.groups ++ [ groupName ] }) model.openUser }, Cmd.none )
+            { model | openUser = Editing.map (\u -> { u | groups = u.groups ++ [ groupName ] }) model.openUser }
+                |> withNoCmd
 
         GroupDropClicked name ->
-            ( { model | openUser = Editing.map (\u -> { u | groups = List.filter (\n -> n /= name) u.groups }) model.openUser }
-            , Cmd.none
-            )
+            { model | openUser = Editing.map (\u -> { u | groups = List.filter (\n -> n /= name) u.groups }) model.openUser }
+                |> withNoCmd
 
         PolicyTableClicked idx stmt ->
-            ( { model | openStatement = PolicyEditor.At idx stmt }, Cmd.none )
+            { model | openStatement = Indexed.At idx stmt } |> withNoCmd
+
+        AddPolicyClicked ->
+            { model | openStatement = Indexed.Append PolicyStatement.new } |> withNoCmd
 
         PolicyEditorEvent e ->
             ( policyEditorEvent model e, Cmd.none )
-
-        AddPolicyClicked ->
-            ( model, Cmd.none )
 
         EditSaveClicked ->
             editSaveClicked sharedModel model
@@ -197,9 +204,6 @@ policyEditorEvent model msg =
             \s -> { model | openStatement = s }
     in
     case PolicyEditor.update model.openStatement msg of
-        PolicyEditor.NoResult ->
-            model
-
         PolicyEditor.Updated s ->
             save s
 
@@ -207,11 +211,11 @@ policyEditorEvent model msg =
             policyEditorOk model
 
         PolicyEditor.Cancelled ->
-            save PolicyEditor.None
+            save Indexed.None
 
         PolicyEditor.Deleted idx ->
             { model
-                | openStatement = PolicyEditor.None
+                | openStatement = Indexed.None
                 , openUser = Editing.map (\u -> { u | policyStatements = deleteInList idx u.policyStatements }) model.openUser
             }
 
@@ -219,17 +223,25 @@ policyEditorEvent model msg =
 policyEditorOk : Model -> Model
 policyEditorOk model =
     case model.openStatement of
-        PolicyEditor.None ->
+        Indexed.None ->
             model
 
-        PolicyEditor.At idx stm ->
+        Indexed.At idx stm ->
             { model
-                | openStatement = PolicyEditor.None
+                | openStatement = Indexed.None
                 , openUser =
                     Editing.map
                         (\u -> { u | policyStatements = updateListAt idx (always stm) u.policyStatements })
                         model.openUser
             }
+
+        Indexed.Append stm ->
+            { model | openStatement = Indexed.None }
+                |> I.into
+                |> I.thenInto openUser
+                |> I.thenInto Editing.itemOpt
+                |> I.thenInto UserInfo.policyStatements
+                |> I.listAppend stm
 
 
 editSaveClicked : Shared.Model -> Model -> ( Model, Cmd Msg )
@@ -437,10 +449,13 @@ editView model user =
 policyEditor : Model -> List (H.Html Msg)
 policyEditor model =
     case model.openStatement of
-        PolicyEditor.None ->
+        Indexed.None ->
             []
 
-        PolicyEditor.At _ stm ->
+        Indexed.At _ stm ->
+            [ PolicyEditor.view PolicyEditorEvent stm ]
+
+        Indexed.Append stm ->
             [ PolicyEditor.view PolicyEditorEvent stm ]
 
 

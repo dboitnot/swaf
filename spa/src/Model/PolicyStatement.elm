@@ -1,9 +1,6 @@
-module Model.PolicyStatement exposing
-    ( PolicyStatement
-    , decoder
-    , encoder
-    )
+module Model.PolicyStatement exposing (PolicyStatement, actions, decoder, effect, encoder, new, resources)
 
+import Into exposing (Into(..))
 import Json.Decode as D exposing (Decoder, list)
 import Json.Decode.Pipeline exposing (required)
 import Json.Encode as E exposing (Value)
@@ -15,6 +12,21 @@ type alias PolicyStatement =
     , actions : List String
     , resources : List String
     }
+
+
+effect : Into PolicyStatement PolicyEffect
+effect =
+    Lens .effect (\e s -> { s | effect = e })
+
+
+actions : Into PolicyStatement (List String)
+actions =
+    Lens .actions (\v s -> { s | actions = v })
+
+
+resources : Into PolicyStatement (List String)
+resources =
+    Lens .resources (\v s -> { s | resources = v })
 
 
 decoder : Decoder PolicyStatement
@@ -32,3 +44,8 @@ encoder s =
         , ( "actions", E.list E.string s.actions )
         , ( "resources", E.list E.string s.resources )
         ]
+
+
+new : PolicyStatement
+new =
+    PolicyStatement PolicyEffect.Allow [] []
