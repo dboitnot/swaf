@@ -1,7 +1,7 @@
 module PolicyEditor exposing (IndexedStatement, Msg(..), UpdateResult(..), update, view)
 
 import Html as H
-import Indexed
+import Indexed exposing (Indexed)
 import Into as I
 import Model.PolicyEffect as PolicyEffect exposing (PolicyEffect(..))
 import Model.PolicyStatement as PolicyStatement exposing (PolicyStatement)
