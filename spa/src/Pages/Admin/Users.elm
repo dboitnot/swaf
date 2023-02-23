@@ -129,7 +129,7 @@ update sharedModel req msg model =
             authorizedUpdate req model users (\_ -> ( { model | users = users |> sorted model }, Cmd.none ))
 
         GotGroups groups ->
-            ( { model | allGroups = groups }, Cmd.none )
+            { model | allGroups = groups } |> withNoCmd
 
         CreateClicked ->
             startEditing model (Creating { loginName = "", fullName = Nothing, groups = [], policyStatements = [] })
