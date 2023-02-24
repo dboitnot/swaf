@@ -1,4 +1,4 @@
-module Into exposing (Into(..), Zipper(..), into, listAppend, map, set, thenInto, value)
+module Into exposing (Into(..), Zipper(..), into, listAppend, map, set, thenInto, thenIntoMaybe, value)
 
 
 type Into outer inner
@@ -57,6 +57,19 @@ intoOptional getMaybe update oldFocus oldUp =
 
         Nothing ->
             Dead (oldUp oldFocus)
+
+
+thenIntoMaybe : Into focus newFocus -> Zipper (Maybe focus) root -> Zipper newFocus root
+thenIntoMaybe field oldZip =
+    case oldZip of
+        Dead root ->
+            Dead root
+
+        Zipper Nothing oldUp ->
+            Dead (oldUp Nothing)
+
+        Zipper (Just oldFocus) oldUp ->
+            thenInto field (Zipper oldFocus (\newFocus -> oldUp (Just newFocus)))
 
 
 map : (focus -> focus) -> Zipper focus root -> root
