@@ -1,9 +1,39 @@
-module Into exposing (Into(..), Zipper(..), into, listAppend, map, set, thenInto, thenIntoMaybe, value)
+module Into exposing (Into(..), Zipper(..), compose, into, listAppend, map, set, thenInto, thenIntoMaybe, value)
 
 
 type Into outer inner
     = Lens (outer -> inner) (inner -> outer -> outer)
     | Optional (outer -> Maybe inner) (inner -> outer -> outer)
+
+
+compose : Into middle inner -> Into outer middle -> Into outer inner
+compose mi om =
+    case ( om, mi ) of
+        ( Lens getMiddle upOuter, Lens getInner upMiddle ) ->
+            Lens (\o -> getInner (getMiddle o))
+                (\v o -> upOuter (upMiddle v (getMiddle o)) o)
+
+        ( Lens getMiddle upOuter, Optional getInnerMaybe upMiddle ) ->
+            Optional (\o -> getInnerMaybe (getMiddle o))
+                (\v o -> upOuter (upMiddle v (getMiddle o)) o)
+
+        ( Optional getMiddleMaybe upOuter, Optional getInnerMaybe upMiddle ) ->
+            Optional (\o -> getMiddleMaybe o |> Maybe.andThen getInnerMaybe)
+                (\v o ->
+                    getMiddleMaybe o
+                        |> Maybe.map (upMiddle v)
+                        |> Maybe.map (\m -> upOuter m o)
+                        |> Maybe.withDefault o
+                )
+
+        ( Optional getMiddleMaybe upOuter, Lens getInner upMiddle ) ->
+            Optional (\o -> getMiddleMaybe o |> Maybe.map getInner)
+                (\v o ->
+                    getMiddleMaybe o
+                        |> Maybe.map (upMiddle v)
+                        |> Maybe.map (\m -> upOuter m o)
+                        |> Maybe.withDefault o
+                )
 
 
 type Zipper focus root
