@@ -1,5 +1,7 @@
 module Pages.Admin.Users exposing (Model, Msg, SortOn, page)
 
+import Api
+import Api.Response as Response exposing (Response)
 import Cmd.Extra exposing (withNoCmd)
 import CrudView exposing (ErrorMessage, crudView)
 import Editing exposing (Editing(..), isCreating, isUpdating)
@@ -10,10 +12,10 @@ import Http
 import Icons
 import Indexed
 import Into as I exposing (Into(..))
-import Model.GroupList as GroupList exposing (GroupList)
+import Model.GroupList exposing (GroupList)
 import Model.PolicyStatement as PolicyStatement exposing (PolicyStatement)
 import Model.UserInfo as UserInfo exposing (UserInfo)
-import Model.UserList as UserList exposing (UserList)
+import Model.UserList exposing (UserList)
 import Page
 import PasswordReset as PR
 import PolicyEditor exposing (IndexedStatement)
@@ -23,8 +25,7 @@ import Request
 import Shared exposing (User)
 import Util
     exposing
-        ( authorizedUpdate
-        , deleteInList
+        ( deleteInList
         , flattenMaybeList
         , httpErrorToString
         , maybeEmptyString
@@ -81,6 +82,16 @@ openUser =
     Lens .openUser (\e m -> { m | openUser = e })
 
 
+users : Into Model (WebData UserList)
+users =
+    Lens .users (\v m -> { m | users = v })
+
+
+allGroups : Into Model (WebData GroupList)
+allGroups =
+    Lens .allGroups (\v m -> { m | allGroups = v })
+
+
 init : Shared.Model -> ( Model, Cmd Msg )
 init sharedModel =
     ( { users = RemoteData.NotAsked
@@ -91,7 +102,7 @@ init sharedModel =
       , allGroups = RemoteData.NotAsked
       , pwResetModel = PR.newModel { forceChange = False }
       }
-    , Cmd.batch [ getUsers sharedModel, getGroups sharedModel ]
+    , Cmd.batch [ getUsers sharedModel, Api.getGroups GotGroups sharedModel ]
     )
 
 
@@ -101,8 +112,8 @@ init sharedModel =
 
 type Msg
     = NoOp
-    | GotUsers (WebData UserList)
-    | GotGroups (WebData GroupList)
+    | GotUsers (Response UserList)
+    | GotGroups (Response GroupList)
     | CreateClicked
     | UserClicked UserInfo
     | StringFieldEdited (String -> UserInfo -> UserInfo) String
@@ -125,11 +136,16 @@ update sharedModel req msg model =
         NoOp ->
             ( model, Cmd.none )
 
-        GotUsers users ->
-            authorizedUpdate req model users (\_ -> ( { model | users = users |> sorted model }, Cmd.none ))
+        GotUsers response ->
+            I.into model
+                |> I.thenInto users
+                |> Response.mapUpdate req (sorted model) response
 
-        GotGroups groups ->
-            { model | allGroups = groups } |> withNoCmd
+        GotGroups response ->
+            -- { model | allGroups = groups } |> withNoCmd
+            I.into model
+                |> I.thenInto allGroups
+                |> Response.update req response
 
         CreateClicked ->
             startEditing model (Creating { loginName = "", fullName = Nothing, groups = [], policyStatements = [] })
@@ -159,7 +175,7 @@ update sharedModel req msg model =
             { model | openStatement = Indexed.Append PolicyStatement.new } |> withNoCmd
 
         PolicyEditorEvent e ->
-            ( policyEditorEvent model e, Cmd.none )
+            policyEditorEvent model e |> withNoCmd
 
         EditSaveClicked ->
             editSaveClicked sharedModel model
@@ -293,9 +309,9 @@ updateError model title err =
     )
 
 
-sorted : Model -> WebData UserList -> WebData UserList
-sorted model data =
-    RemoteData.map (\users -> { users | users = sorter model users.users }) data
+sorted : Model -> UserList -> UserList
+sorted model ul =
+    { ul | users = sorter model ul.users }
 
 
 sorter : Model -> (List UserInfo -> List UserInfo)
@@ -315,19 +331,8 @@ sorter model =
 
 
 getUsers : Shared.Model -> Cmd Msg
-getUsers sharedModel =
-    Http.get
-        { url = sharedModel.baseUrl ++ "/api/users"
-        , expect = UserList.decoder |> Http.expectJson (RemoteData.fromResult >> GotUsers)
-        }
-
-
-getGroups : Shared.Model -> Cmd Msg
-getGroups sharedModel =
-    Http.get
-        { url = sharedModel.baseUrl ++ "/api/groups"
-        , expect = GroupList.decoder |> Http.expectJson (RemoteData.fromResult >> GotGroups)
-        }
+getUsers =
+    Api.getUsers GotUsers
 
 
 createUser : Shared.Model -> UserInfo -> Cmd Msg
@@ -501,7 +506,7 @@ textInputField label attrs get set validator user =
 
 
 groupList : Maybe Model -> List String -> H.Html Msg
-groupList maybeModel groups =
+groupList maybeModel grps =
     let
         avGroups : Maybe (List String)
         avGroups =
@@ -519,7 +524,7 @@ groupList maybeModel groups =
                 Just someGroups ->
                     [ groupAddTag someGroups ]
     in
-    H.div [] (List.map (groupTag (maybeIs maybeModel)) groups ++ addButton)
+    H.div [] (List.map (groupTag (maybeIs maybeModel)) grps ++ addButton)
 
 
 groupTag : Bool -> String -> H.Html Msg
@@ -560,8 +565,8 @@ groupAddMenu groupNames =
 availableGroupNames : Model -> List String
 availableGroupNames model =
     case model.allGroups of
-        RemoteData.Success groups ->
-            groups.groups
+        RemoteData.Success gl ->
+            gl.groups
                 |> List.map .name
                 |> List.sort
 
