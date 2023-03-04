@@ -1,6 +1,6 @@
 module Api exposing (createUser, getGroups, getUsers, updatePassword, updateUser)
 
-import Api.Response as Response
+import Api.Response as Response exposing (Response)
 import Http exposing (Expect)
 import Json.Decode exposing (Decoder)
 import Model.GroupList as GroupList exposing (GroupList)

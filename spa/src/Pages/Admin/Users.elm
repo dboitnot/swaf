@@ -1,8 +1,8 @@
 module Pages.Admin.Users exposing (Model, Msg, SortOn, page)
 
 import Api
-import Api.Response as Response exposing (Response)
-import Cmd.Extra exposing (withNoCmd)
+import Api.Response as R exposing (Response)
+import Cmd.Extra exposing (addCmd, withNoCmd)
 import CrudView exposing (ErrorMessage, crudView)
 import Editing exposing (Editing(..), isCreating, isUpdating)
 import Gen.Params.Admin.Users exposing (Params)
@@ -124,8 +124,8 @@ type Msg
     | PolicyEditorEvent PolicyEditor.Msg
     | EditSaveClicked
     | EditCancelled
-    | UserUpdated (Result Http.Error ())
-    | PasswordUpdated (Result Http.Error ())
+    | UserUpdated (Response ())
+    | PasswordUpdated (Response ())
     | UpdateErrorCleared
     | PasswordMsg PR.Msg
 
@@ -139,13 +139,13 @@ update sharedModel req msg model =
         GotUsers response ->
             I.into model
                 |> I.thenInto users
-                |> Response.mapUpdate req (sorted model) response
+                |> R.mapUpdate req (sorted model) response
 
         GotGroups response ->
             -- { model | allGroups = groups } |> withNoCmd
             I.into model
                 |> I.thenInto allGroups
-                |> Response.update req response
+                |> R.update req response
 
         CreateClicked ->
             startEditing model (Creating { loginName = "", fullName = Nothing, groups = [], policyStatements = [] })
@@ -183,17 +183,27 @@ update sharedModel req msg model =
         EditCancelled ->
             ( { model | openUser = NotEditing }, Cmd.none )
 
-        UserUpdated (Ok _) ->
-            userUpdatedSuccess sharedModel model
+        -- UserUpdated
+        --   Unauthorized - Redirect
+        --   Error - set model.errorMessage
+        --   Success -
+        --     PR.valid model.pwResetModel - updatePassword, refresh user list
+        --     Otherwise model.openUser = NotEditing, refresh user list
+        UserUpdated res ->
+            R.toResult req model res
+                |> R.onRemoteError (updateError model "Error updating user")
+                |> Result.map (\_ -> PR.valid model.pwResetModel)
+                |> R.andMaybeThen (updatePassword sharedModel model)
+                |> R.andMaybeMap (Tuple.pair model)
+                |> R.orMaybe ( { model | openUser = NotEditing }, Cmd.none )
+                |> Result.map (getUsers sharedModel |> addCmd)
+                |> R.or
 
-        UserUpdated (Err e) ->
-            updateError model "Error Updating User" e
-
-        PasswordUpdated (Ok _) ->
-            editComplete sharedModel model
-
-        PasswordUpdated (Err e) ->
-            updateError model "Error Setting User Password" e
+        PasswordUpdated res ->
+            R.toResult req model res
+                |> R.onRemoteError (updateError model "Error setting user password")
+                |> Result.map (\_ -> ( { model | openUser = NotEditing }, getUsers sharedModel ))
+                |> R.or
 
         UpdateErrorCleared ->
             ( { model | errorMessage = Nothing }, Cmd.none )
@@ -264,49 +274,25 @@ editSaveClicked : Shared.Model -> Model -> ( Model, Cmd Msg )
 editSaveClicked sharedModel model =
     case model.openUser of
         Creating user ->
-            ( { model | openUser = CreateLoading user }, createUser sharedModel user )
+            ( { model | openUser = CreateLoading user }, Api.createUser UserUpdated sharedModel user )
 
         Updating user ->
-            ( { model | openUser = UpdateLoading user }, updateUser sharedModel user )
+            ( { model | openUser = UpdateLoading user }, Api.updateUser UserUpdated sharedModel user )
 
         _ ->
             ( model, Cmd.none )
 
 
-userUpdatedSuccess : Shared.Model -> Model -> ( Model, Cmd Msg )
-userUpdatedSuccess sharedModel model =
-    let
-        up : Maybe ( UserInfo, String )
-        up =
-            Maybe.map2 (\u p -> ( u, p ))
-                (Editing.item model.openUser)
-                (PR.valid model.pwResetModel)
-    in
-    case up of
-        Nothing ->
-            editComplete sharedModel model
-
-        Just ( user, password ) ->
-            ( model, updatePassword sharedModel user password )
-
-
-editComplete : Shared.Model -> Model -> ( Model, Cmd Msg )
-editComplete sharedModel model =
-    ( { model | openUser = NotEditing }, getUsers sharedModel )
-
-
-updateError : Model -> String -> Http.Error -> ( Model, Cmd Msg )
+updateError : Model -> String -> Http.Error -> Model
 updateError model title err =
-    ( { model
+    { model
         | errorMessage =
             Just
                 { title = title
                 , message = httpErrorToString err
                 , onAck = UpdateErrorCleared
                 }
-      }
-    , Cmd.none
-    )
+    }
 
 
 sorted : Model -> UserList -> UserList
@@ -335,39 +321,10 @@ getUsers =
     Api.getUsers GotUsers
 
 
-createUser : Shared.Model -> UserInfo -> Cmd Msg
-createUser sharedModel user =
-    Http.request
-        { url = sharedModel.baseUrl ++ "/api/user"
-        , method = "PUT"
-        , headers = []
-        , body = Http.jsonBody (UserInfo.encoder user)
-        , expect = Http.expectWhatever UserUpdated
-        , timeout = Nothing
-        , tracker = Nothing
-        }
-
-
-updateUser : Shared.Model -> UserInfo -> Cmd Msg
-updateUser sharedModel user =
-    Http.post
-        { url = sharedModel.baseUrl ++ "/api/user"
-        , body = Http.jsonBody (UserInfo.encoder user)
-        , expect = Http.expectWhatever UserUpdated
-        }
-
-
-updatePassword : Shared.Model -> UserInfo -> String -> Cmd Msg
-updatePassword sharedModel user password =
-    Http.post
-        { url = sharedModel.baseUrl ++ "/api/user/" ++ user.loginName ++ "/password"
-        , body = Http.stringBody "text/plain" password
-        , expect = Http.expectWhatever PasswordUpdated
-        }
-
-
-
--- SUBSCRIPTIONS
+updatePassword : Shared.Model -> Model -> String -> Maybe (Cmd Msg)
+updatePassword sharedModel model pass =
+    Editing.item model.openUser
+        |> Maybe.map (\u -> Api.updatePassword PasswordUpdated sharedModel u pass)
 
 
 subscriptions : Model -> Sub Msg
