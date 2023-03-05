@@ -1,10 +1,11 @@
-module PolicyEditor exposing (IndexedStatement, Msg(..), UpdateResult(..), update, view)
+module PolicyEditor exposing (IndexedStatement, Msg(..), update, view)
 
 import Html as H
 import Indexed exposing (Indexed)
 import Into as I
 import Model.PolicyEffect as PolicyEffect exposing (PolicyEffect(..))
 import Model.PolicyStatement as PolicyStatement exposing (PolicyStatement)
+import Util exposing (deleteInList)
 import W.Button
 import W.Container
 import W.InputField
@@ -23,60 +24,56 @@ type Msg
     | DeleteClicked
 
 
-type UpdateResult
-    = Updated IndexedStatement
-    | Saved
-    | Cancelled
-    | Deleted Int
-
-
 type alias IndexedStatement =
     Indexed PolicyStatement
 
 
-update : IndexedStatement -> Msg -> UpdateResult
-update istm msg =
+update : I.Into model IndexedStatement -> I.Into model (List PolicyStatement) -> model -> Msg -> model
+update openStm stmList model msg =
     let
-        intoStm : I.Zipper PolicyStatement IndexedStatement
-        intoStm =
-            I.into istm |> I.thenInto Indexed.itemOpt
+        intoOpenStm : I.Zipper PolicyStatement model
+        intoOpenStm =
+            I.into model |> I.thenInto openStm |> I.thenInto Indexed.itemOpt
+
+        curStm : I.Zipper IndexedStatement model
+        curStm =
+            I.into model |> I.thenInto openStm
+
+        stopEditing : model
+        stopEditing =
+            I.into model |> I.thenInto openStm |> I.set Indexed.None
     in
     case msg of
         EffectChanged e ->
-            intoStm
+            intoOpenStm
                 |> I.thenInto PolicyStatement.effect
                 |> I.set e
-                |> Updated
 
         ActionsChanged s ->
-            intoStm
+            intoOpenStm
                 |> I.thenInto PolicyStatement.actions
                 |> I.set (String.lines s)
-                |> Updated
 
         ResourcesChanged s ->
-            intoStm
+            intoOpenStm
                 |> I.thenInto PolicyStatement.resources
                 |> I.set (String.lines s)
-                |> Updated
 
         InputBlurred ->
-            intoStm
-                |> I.map cleanStatement
-                |> Updated
+            intoOpenStm |> I.map cleanStatement
 
         OkClicked ->
-            Saved
+            I.into stopEditing
+                |> I.thenInto stmList
+                |> I.map2 curStm Indexed.setInList
 
         CancelClicked ->
-            Cancelled
+            stopEditing
 
         DeleteClicked ->
-            I.into istm
-                |> I.thenInto Indexed.indexOpt
-                |> I.value
-                |> Maybe.map Deleted
-                |> Maybe.withDefault Cancelled
+            I.into stopEditing
+                |> I.thenInto stmList
+                |> I.map2 (curStm |> I.thenInto Indexed.indexOpt) (\lst idx -> deleteInList idx lst)
 
 
 cleanStatement : PolicyStatement -> PolicyStatement

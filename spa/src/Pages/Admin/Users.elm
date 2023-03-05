@@ -25,13 +25,11 @@ import Request
 import Shared exposing (User)
 import Util
     exposing
-        ( deleteInList
-        , flattenMaybeList
+        ( flattenMaybeList
         , httpErrorToString
         , maybeEmptyString
         , maybeIs
         , sortBy
-        , updateListAt
         )
 import View exposing (View)
 import W.Button
@@ -80,6 +78,16 @@ type alias Model =
 openUser : Into Model (Editing UserInfo)
 openUser =
     Lens .openUser (\e m -> { m | openUser = e })
+
+
+openUserStatements : Into Model (List PolicyStatement)
+openUserStatements =
+    openUser |> I.compose Editing.itemOpt |> I.compose UserInfo.policyStatements
+
+
+openStatement : Into Model IndexedStatement
+openStatement =
+    Lens .openStatement (\v m -> { m | openStatement = v })
 
 
 users : Into Model (WebData UserList)
@@ -175,7 +183,7 @@ update sharedModel req msg model =
             { model | openStatement = Indexed.Append PolicyStatement.new } |> withNoCmd
 
         PolicyEditorEvent e ->
-            policyEditorEvent model e |> withNoCmd
+            PolicyEditor.update openStatement openUserStatements model e |> withNoCmd
 
         EditSaveClicked ->
             editSaveClicked sharedModel model
@@ -220,54 +228,6 @@ startEditing model edit =
       }
     , Cmd.none
     )
-
-
-policyEditorEvent : Model -> PolicyEditor.Msg -> Model
-policyEditorEvent model msg =
-    let
-        save : IndexedStatement -> Model
-        save =
-            \s -> { model | openStatement = s }
-    in
-    case PolicyEditor.update model.openStatement msg of
-        PolicyEditor.Updated s ->
-            save s
-
-        PolicyEditor.Saved ->
-            policyEditorOk model
-
-        PolicyEditor.Cancelled ->
-            save Indexed.None
-
-        PolicyEditor.Deleted idx ->
-            { model
-                | openStatement = Indexed.None
-                , openUser = Editing.map (\u -> { u | policyStatements = deleteInList idx u.policyStatements }) model.openUser
-            }
-
-
-policyEditorOk : Model -> Model
-policyEditorOk model =
-    case model.openStatement of
-        Indexed.None ->
-            model
-
-        Indexed.At idx stm ->
-            { model
-                | openStatement = Indexed.None
-                , openUser =
-                    Editing.map
-                        (\u -> { u | policyStatements = updateListAt idx (always stm) u.policyStatements })
-                        model.openUser
-            }
-
-        Indexed.Append stm ->
-            { model | openStatement = Indexed.None }
-                |> I.into
-                |> I.thenInto openUser
-                |> I.thenInto Editing.itemOpt
-                |> I.thenInto UserInfo.policyStatements
-                |> I.listAppend stm
 
 
 editSaveClicked : Shared.Model -> Model -> ( Model, Cmd Msg )

@@ -23,10 +23,6 @@ type Response a
     | Authorized (WebData a)
 
 
-
--- Unauthorized (Request.pushRoute Gen.Route.SignIn req)
-
-
 fromResult : Result Error a -> Response a
 fromResult res =
     case res of

@@ -18,3 +18,12 @@ decoder =
         |> required "name" D.string
         |> optional "description" (maybe D.string) Nothing
         |> required "policy_statements" (list PolicyStatement.decoder)
+
+
+
+-- new : GroupInfo
+-- new =
+--     { name = ""
+--     , description = Nothing
+--     , policyStatements = []
+--     }

@@ -1,4 +1,4 @@
-module Into exposing (Into(..), Zipper(..), compose, into, listAppend, map, set, thenInto, thenIntoMaybe, unzip, value)
+module Into exposing (Into(..), Zipper(..), compose, into, map, map2, set, thenInto, thenIntoMaybe, unzip, value)
 
 
 type Into outer inner
@@ -112,6 +112,19 @@ map fn zip =
             up (fn focus)
 
 
+map2 : Zipper focusB rootB -> (focusA -> focusB -> focusA) -> Zipper focusA rootA -> rootA
+map2 b fn a =
+    case ( a, b ) of
+        ( Zipper focusA up, Zipper focusB _ ) ->
+            up (fn focusA focusB)
+
+        ( Zipper focus up, Dead _ ) ->
+            up focus
+
+        ( Dead root, _ ) ->
+            root
+
+
 set : focus -> Zipper focus root -> root
 set v =
     map (always v)
@@ -122,6 +135,7 @@ unzip =
     map identity
 
 
-listAppend : item -> Zipper (List item) root -> root
-listAppend item =
-    map (\l -> l ++ [ item ])
+
+-- listAppend : item -> Zipper (List item) root -> root
+-- listAppend item =
+--     map (\l -> l ++ [ item ])

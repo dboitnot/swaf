@@ -1,6 +1,7 @@
-module Indexed exposing (Indexed(..), indexOpt, itemOpt)
+module Indexed exposing (Indexed(..), indexOpt, itemOpt, setInList)
 
 import Into exposing (Into(..))
+import Util exposing (updateListAt)
 
 
 type Indexed a
@@ -66,3 +67,16 @@ toTuple indexed =
 
         Append a ->
             ( Nothing, Just a )
+
+
+setInList : List a -> Indexed a -> List a
+setInList lst idx =
+    case idx of
+        None ->
+            lst
+
+        At i v ->
+            updateListAt i (always v) lst
+
+        Append v ->
+            lst ++ [ v ]
