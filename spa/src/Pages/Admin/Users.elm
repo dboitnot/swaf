@@ -1,5 +1,8 @@
 module Pages.Admin.Users exposing (Model, Msg, SortOn, page)
 
+import Api
+import Api.Response as R exposing (Response)
+import Cmd.Extra exposing (addCmd, withCmd, withNoCmd)
 import CrudView exposing (ErrorMessage, crudView)
 import Editing exposing (Editing(..), isCreating, isUpdating)
 import Gen.Params.Admin.Users exposing (Params)
@@ -7,10 +10,12 @@ import Html as H
 import Html.Attributes as A
 import Http
 import Icons
-import Model.GroupList as GroupList exposing (GroupList)
-import Model.PolicyStatement exposing (PolicyStatement)
+import Indexed
+import Into as I exposing (Into(..))
+import Model.GroupList exposing (GroupList)
+import Model.PolicyStatement as PolicyStatement exposing (PolicyStatement)
 import Model.UserInfo as UserInfo exposing (UserInfo)
-import Model.UserList as UserList exposing (UserList)
+import Model.UserList exposing (UserList)
 import Page
 import PasswordReset as PR
 import PolicyEditor exposing (IndexedStatement)
@@ -18,25 +23,14 @@ import PolicyTable
 import RemoteData exposing (WebData)
 import Request
 import Shared exposing (User)
-import Util
-    exposing
-        ( authorizedUpdate
-        , deleteInList
-        , flattenMaybeList
-        , httpErrorToString
-        , maybeEmptyString
-        , maybeIs
-        , sortBy
-        , updateListAt
-        )
+import Util exposing (httpErrorToString, maybeEmptyString, maybeIs, sortBy)
+import Ux.InputField as InputField
+import Ux.TextInputField as TextInputField
 import View exposing (View)
 import W.Button
 import W.Container
 import W.Divider
-import W.InputField
-import W.InputText
 import W.Menu
-import W.Message
 import W.Popover
 import W.Table
 import W.Tag
@@ -73,17 +67,42 @@ type alias Model =
     }
 
 
+openUser : Into Model (Editing UserInfo)
+openUser =
+    Lens .openUser (\e m -> { m | openUser = e })
+
+
+openUserStatements : Into Model (List PolicyStatement)
+openUserStatements =
+    openUser |> I.compose Editing.itemOpt |> I.compose UserInfo.policyStatements
+
+
+openStatement : Into Model IndexedStatement
+openStatement =
+    Lens .openStatement (\v m -> { m | openStatement = v })
+
+
+users : Into Model (WebData UserList)
+users =
+    Lens .users (\v m -> { m | users = v })
+
+
+allGroups : Into Model (WebData GroupList)
+allGroups =
+    Lens .allGroups (\v m -> { m | allGroups = v })
+
+
 init : Shared.Model -> ( Model, Cmd Msg )
 init sharedModel =
     ( { users = RemoteData.NotAsked
       , sortOn = Name
       , openUser = NotEditing
-      , openStatement = PolicyEditor.None
+      , openStatement = Indexed.None
       , errorMessage = Nothing
       , allGroups = RemoteData.NotAsked
       , pwResetModel = PR.newModel { forceChange = False }
       }
-    , Cmd.batch [ getUsers sharedModel, getGroups sharedModel ]
+    , Cmd.batch [ getUsers sharedModel, Api.getGroups GotGroups sharedModel ]
     )
 
 
@@ -93,8 +112,8 @@ init sharedModel =
 
 type Msg
     = NoOp
-    | GotUsers (WebData UserList)
-    | GotGroups (WebData GroupList)
+    | GotUsers (Response UserList)
+    | GotGroups (Response GroupList)
     | CreateClicked
     | UserClicked UserInfo
     | StringFieldEdited (String -> UserInfo -> UserInfo) String
@@ -105,8 +124,8 @@ type Msg
     | PolicyEditorEvent PolicyEditor.Msg
     | EditSaveClicked
     | EditCancelled
-    | UserUpdated (Result Http.Error ())
-    | PasswordUpdated (Result Http.Error ())
+    | UserUpdated (Response ())
+    | PasswordUpdated (Response ())
     | UpdateErrorCleared
     | PasswordMsg PR.Msg
 
@@ -117,60 +136,75 @@ update sharedModel req msg model =
         NoOp ->
             ( model, Cmd.none )
 
-        GotUsers users ->
-            authorizedUpdate req model users (\_ -> ( { model | users = users |> sorted model }, Cmd.none ))
+        GotUsers response ->
+            I.into model
+                |> I.thenInto users
+                |> R.mapUpdate req (sorted model) response
 
-        GotGroups groups ->
-            ( { model | allGroups = groups }, Cmd.none )
+        GotGroups response ->
+            -- { model | allGroups = groups } |> withNoCmd
+            I.into model
+                |> I.thenInto allGroups
+                |> R.update req response
 
         CreateClicked ->
             startEditing model (Creating { loginName = "", fullName = Nothing, groups = [], policyStatements = [] })
 
         UserClicked user ->
-            ( { model
+            { model
                 | openUser = Updating user
                 , pwResetModel = PR.newModel { forceChange = Editing.isCreating model.openUser }
-              }
-            , Cmd.none
-            )
+            }
+                |> withNoCmd
 
         StringFieldEdited fn v ->
-            ( { model | openUser = Editing.map (fn v) model.openUser }, Cmd.none )
+            { model | openUser = Editing.map (fn v) model.openUser } |> withNoCmd
 
         GroupAddClicked groupName ->
-            ( { model | openUser = Editing.map (\u -> { u | groups = u.groups ++ [ groupName ] }) model.openUser }, Cmd.none )
+            { model | openUser = Editing.map (\u -> { u | groups = u.groups ++ [ groupName ] }) model.openUser }
+                |> withNoCmd
 
         GroupDropClicked name ->
-            ( { model | openUser = Editing.map (\u -> { u | groups = List.filter (\n -> n /= name) u.groups }) model.openUser }
-            , Cmd.none
-            )
+            { model | openUser = Editing.map (\u -> { u | groups = List.filter (\n -> n /= name) u.groups }) model.openUser }
+                |> withNoCmd
 
         PolicyTableClicked idx stmt ->
-            ( { model | openStatement = PolicyEditor.At idx stmt }, Cmd.none )
-
-        PolicyEditorEvent e ->
-            ( policyEditorEvent model e, Cmd.none )
+            { model | openStatement = Indexed.At idx stmt } |> withNoCmd
 
         AddPolicyClicked ->
-            ( model, Cmd.none )
+            { model | openStatement = Indexed.Append PolicyStatement.new } |> withNoCmd
+
+        PolicyEditorEvent e ->
+            PolicyEditor.update openStatement openUserStatements model e |> withNoCmd
 
         EditSaveClicked ->
-            editSaveClicked sharedModel model
+            { model | openUser = Editing.toLoading model.openUser }
+                |> withCmd (Api.saveUser UserUpdated sharedModel model.openUser)
 
         EditCancelled ->
             ( { model | openUser = NotEditing }, Cmd.none )
 
-        UserUpdated (Ok _) ->
-            userUpdatedSuccess sharedModel model
+        -- UserUpdated
+        --   Unauthorized - Redirect
+        --   Error - set model.errorMessage
+        --   Success -
+        --     PR.valid model.pwResetModel - updatePassword, refresh user list
+        --     Otherwise model.openUser = NotEditing, refresh user list
+        UserUpdated res ->
+            R.toResult req model res
+                |> R.onRemoteError (updateError model "Error updating user")
+                |> Result.map (\_ -> PR.valid model.pwResetModel)
+                |> R.andMaybeThen (updatePassword sharedModel model)
+                |> R.andMaybeMap (Tuple.pair model)
+                |> R.orMaybe ( { model | openUser = NotEditing }, Cmd.none )
+                |> Result.map (getUsers sharedModel |> addCmd)
+                |> R.or
 
-        UserUpdated (Err e) ->
-            updateError model "Error Updating User" e
-
-        PasswordUpdated (Ok _) ->
-            editComplete sharedModel model
-
-        PasswordUpdated (Err e) ->
-            updateError model "Error Setting User Password" e
+        PasswordUpdated res ->
+            R.toResult req model res
+                |> R.onRemoteError (updateError model "Error setting user password")
+                |> Result.map (\_ -> ( { model | openUser = NotEditing }, getUsers sharedModel ))
+                |> R.or
 
         UpdateErrorCleared ->
             ( { model | errorMessage = Nothing }, Cmd.none )
@@ -189,101 +223,21 @@ startEditing model edit =
     )
 
 
-policyEditorEvent : Model -> PolicyEditor.Msg -> Model
-policyEditorEvent model msg =
-    let
-        save : IndexedStatement -> Model
-        save =
-            \s -> { model | openStatement = s }
-    in
-    case PolicyEditor.update model.openStatement msg of
-        PolicyEditor.NoResult ->
-            model
-
-        PolicyEditor.Updated s ->
-            save s
-
-        PolicyEditor.Saved ->
-            policyEditorOk model
-
-        PolicyEditor.Cancelled ->
-            save PolicyEditor.None
-
-        PolicyEditor.Deleted idx ->
-            { model
-                | openStatement = PolicyEditor.None
-                , openUser = Editing.map (\u -> { u | policyStatements = deleteInList idx u.policyStatements }) model.openUser
-            }
-
-
-policyEditorOk : Model -> Model
-policyEditorOk model =
-    case model.openStatement of
-        PolicyEditor.None ->
-            model
-
-        PolicyEditor.At idx stm ->
-            { model
-                | openStatement = PolicyEditor.None
-                , openUser =
-                    Editing.map
-                        (\u -> { u | policyStatements = updateListAt idx (always stm) u.policyStatements })
-                        model.openUser
-            }
-
-
-editSaveClicked : Shared.Model -> Model -> ( Model, Cmd Msg )
-editSaveClicked sharedModel model =
-    case model.openUser of
-        Creating user ->
-            ( { model | openUser = CreateLoading user }, createUser sharedModel user )
-
-        Updating user ->
-            ( { model | openUser = UpdateLoading user }, updateUser sharedModel user )
-
-        _ ->
-            ( model, Cmd.none )
-
-
-userUpdatedSuccess : Shared.Model -> Model -> ( Model, Cmd Msg )
-userUpdatedSuccess sharedModel model =
-    let
-        up : Maybe ( UserInfo, String )
-        up =
-            Maybe.map2 (\u p -> ( u, p ))
-                (Editing.item model.openUser)
-                (PR.valid model.pwResetModel)
-    in
-    case up of
-        Nothing ->
-            editComplete sharedModel model
-
-        Just ( user, password ) ->
-            ( model, updatePassword sharedModel user password )
-
-
-editComplete : Shared.Model -> Model -> ( Model, Cmd Msg )
-editComplete sharedModel model =
-    ( { model | openUser = NotEditing }, getUsers sharedModel )
-
-
-updateError : Model -> String -> Http.Error -> ( Model, Cmd Msg )
+updateError : Model -> String -> Http.Error -> Model
 updateError model title err =
-    ( { model
+    { model
         | errorMessage =
             Just
                 { title = title
                 , message = httpErrorToString err
                 , onAck = UpdateErrorCleared
                 }
-      }
-    , Cmd.none
-    )
+    }
 
 
-sorted : Model -> WebData UserList -> WebData UserList
-sorted model data =
-    RemoteData.map (\users -> { users | users = sorter model users.users }) data
+sorted : Model -> UserList -> UserList
+sorted model ul =
+    { ul | users = sorter model ul.users }
 
 
 sorter : Model -> (List UserInfo -> List UserInfo)
@@ -303,54 +257,14 @@ sorter model =
 
 
 getUsers : Shared.Model -> Cmd Msg
-getUsers sharedModel =
-    Http.get
-        { url = sharedModel.baseUrl ++ "/api/users"
-        , expect = UserList.decoder |> Http.expectJson (RemoteData.fromResult >> GotUsers)
-        }
+getUsers =
+    Api.getUsers GotUsers
 
 
-getGroups : Shared.Model -> Cmd Msg
-getGroups sharedModel =
-    Http.get
-        { url = sharedModel.baseUrl ++ "/api/groups"
-        , expect = GroupList.decoder |> Http.expectJson (RemoteData.fromResult >> GotGroups)
-        }
-
-
-createUser : Shared.Model -> UserInfo -> Cmd Msg
-createUser sharedModel user =
-    Http.request
-        { url = sharedModel.baseUrl ++ "/api/user"
-        , method = "PUT"
-        , headers = []
-        , body = Http.jsonBody (UserInfo.encoder user)
-        , expect = Http.expectWhatever UserUpdated
-        , timeout = Nothing
-        , tracker = Nothing
-        }
-
-
-updateUser : Shared.Model -> UserInfo -> Cmd Msg
-updateUser sharedModel user =
-    Http.post
-        { url = sharedModel.baseUrl ++ "/api/user"
-        , body = Http.jsonBody (UserInfo.encoder user)
-        , expect = Http.expectWhatever UserUpdated
-        }
-
-
-updatePassword : Shared.Model -> UserInfo -> String -> Cmd Msg
-updatePassword sharedModel user password =
-    Http.post
-        { url = sharedModel.baseUrl ++ "/api/user/" ++ user.loginName ++ "/password"
-        , body = Http.stringBody "text/plain" password
-        , expect = Http.expectWhatever PasswordUpdated
-        }
-
-
-
--- SUBSCRIPTIONS
+updatePassword : Shared.Model -> Model -> String -> Maybe (Cmd Msg)
+updatePassword sharedModel model pass =
+    Editing.item model.openUser
+        |> Maybe.map (\u -> Api.updatePassword PasswordUpdated sharedModel u pass)
 
 
 subscriptions : Model -> Sub Msg
@@ -408,77 +322,31 @@ openItemIsValid model =
 editView : Model -> UserInfo -> H.Html Msg
 editView model user =
     W.Container.view [ W.Container.vertical ]
-        ([ textInputField "Login Name"
-            [ W.InputText.readOnly (isUpdating model.openUser) ]
-            .loginName
-            (\v u -> { u | loginName = v })
-            loginNameValidationMessage
-            user
-         , textInputField "Full Name"
+        [ TextInputField.view
+            [ TextInputField.readOnly (isUpdating model.openUser)
+            , TextInputField.validationMessage (loginNameValidationMessage user.loginName)
+            ]
+            { label = "Login Name"
+            , value = user.loginName
+            , onInput = StringFieldEdited (I.setter UserInfo.loginName)
+            }
+        , TextInputField.view []
+            { label = "Full Name"
+            , value = Maybe.withDefault "" user.fullName
+            , onInput = StringFieldEdited (\v u -> { u | fullName = maybeEmptyString v })
+            }
+        , InputField.view "Password" [] (PR.view { wrapperMsg = PasswordMsg, model = model.pwResetModel })
+        , InputField.view "Groups" [] (groupList (Just model) user.groups)
+        , InputField.view "Permissions"
             []
-            (\u -> Maybe.withDefault "" u.fullName)
-            (\v u -> { u | fullName = maybeEmptyString v })
-            (always Nothing)
-            user
-         , inputField "Password" (PR.view { wrapperMsg = PasswordMsg, model = model.pwResetModel })
-         , inputField "Groups" (groupList (Just model) user.groups)
-         , inputField "Permissions"
             (PolicyTable.view
                 { onClick = PolicyTableClicked
                 , onAdd = AddPolicyClicked
                 , policies = user.policyStatements
                 }
             )
-         ]
-            ++ policyEditor model
-        )
-
-
-policyEditor : Model -> List (H.Html Msg)
-policyEditor model =
-    case model.openStatement of
-        PolicyEditor.None ->
-            []
-
-        PolicyEditor.At _ stm ->
-            [ PolicyEditor.view PolicyEditorEvent stm ]
-
-
-inputField : String -> H.Html Msg -> H.Html Msg
-inputField label input =
-    W.InputField.view [] { label = [ H.text label ], input = [ input ] }
-
-
-validatedInputField : String -> H.Html Msg -> Maybe String -> H.Html Msg
-validatedInputField label input validationMessage =
-    inputField label
-        (W.Container.view [ W.Container.vertical ]
-            (flattenMaybeList
-                [ Just input
-                , validationMessage
-                    |> Maybe.map (\m -> W.Message.view [ W.Message.danger ] [ H.text m ])
-                ]
-            )
-        )
-
-
-textInputField :
-    String
-    -> List (W.InputText.Attribute Msg)
-    -> (UserInfo -> String)
-    -> (String -> UserInfo -> UserInfo)
-    -> (String -> Maybe String)
-    -> UserInfo
-    -> H.Html Msg
-textInputField label attrs get set validator user =
-    let
-        value : String
-        value =
-            get user
-    in
-    validatedInputField label
-        (W.InputText.view attrs { onInput = StringFieldEdited set, value = value })
-        (validator value)
+        , PolicyEditor.indexedView PolicyEditorEvent model.openStatement
+        ]
 
 
 
@@ -486,7 +354,7 @@ textInputField label attrs get set validator user =
 
 
 groupList : Maybe Model -> List String -> H.Html Msg
-groupList maybeModel groups =
+groupList maybeModel grps =
     let
         avGroups : Maybe (List String)
         avGroups =
@@ -504,7 +372,7 @@ groupList maybeModel groups =
                 Just someGroups ->
                     [ groupAddTag someGroups ]
     in
-    H.div [] (List.map (groupTag (maybeIs maybeModel)) groups ++ addButton)
+    H.div [] (List.map (groupTag (maybeIs maybeModel)) grps ++ addButton)
 
 
 groupTag : Bool -> String -> H.Html Msg
@@ -545,8 +413,8 @@ groupAddMenu groupNames =
 availableGroupNames : Model -> List String
 availableGroupNames model =
     case model.allGroups of
-        RemoteData.Success groups ->
-            groups.groups
+        RemoteData.Success gl ->
+            gl.groups
                 |> List.map .name
                 |> List.sort
 

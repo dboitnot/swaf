@@ -1,5 +1,6 @@
-module Model.UserInfo exposing (UserInfo, decoder, encoder)
+module Model.UserInfo exposing (UserInfo, decoder, encoder, loginName, policyStatements)
 
+import Into exposing (Into(..))
 import Json.Decode as D exposing (Decoder, list, maybe)
 import Json.Decode.Pipeline exposing (optional, required)
 import Json.Encode as E exposing (Value)
@@ -34,3 +35,23 @@ encoder u =
             , Just ( "policy_statements", E.list PolicyStatement.encoder u.policyStatements )
             ]
         )
+
+
+
+-- Into
+
+
+loginName : Into UserInfo String
+loginName =
+    Lens .loginName (\v u -> { u | loginName = v })
+
+
+policyStatements : Into UserInfo (List PolicyStatement)
+policyStatements =
+    Lens .policyStatements (\v u -> { u | policyStatements = v })
+
+
+
+-- fullName : Into UserInfo (Maybe String)
+-- fullName =
+--     Lens .fullName (\v u -> { u | fullName = v })

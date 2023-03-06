@@ -1,4 +1,6 @@
-module Editing exposing (Editing(..), isCreating, isUpdating, item, map)
+module Editing exposing (Editing(..), isCreating, isUpdating, item, itemOpt, map, toLoading)
+
+import Into exposing (Into(..))
 
 
 type Editing o
@@ -22,6 +24,19 @@ map fn e =
             Updating (fn o)
 
         -- Deny mutation while waiting for server
+        _ ->
+            e
+
+
+toLoading : Editing o -> Editing o
+toLoading e =
+    case e of
+        Creating o ->
+            CreateLoading o
+
+        Updating o ->
+            UpdateLoading o
+
         _ ->
             e
 
@@ -69,3 +84,21 @@ item e =
 
         UpdateLoading o ->
             Just o
+
+
+itemOpt : Into (Editing o) o
+itemOpt =
+    let
+        set : o -> Editing o -> Editing o
+        set o e =
+            case e of
+                Creating _ ->
+                    Creating o
+
+                Updating _ ->
+                    Updating o
+
+                _ ->
+                    e
+    in
+    Optional item set

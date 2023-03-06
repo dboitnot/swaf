@@ -75,6 +75,34 @@ fn group_list(
     Ok(Json(GroupList { groups }))
 }
 
+#[put("/group", format = "application/json", data = "<group>")]
+fn group_create(
+    auth: RequestAuthorizor,
+    policy_store: &State<FilePolicyStore>,
+    group: Json<Group>,
+) -> Result<(), Status> {
+    let group = group.into_inner();
+    auth.require("CreateGroup", &format!("group:{}", group.name))
+        .ok()?;
+    policy_store
+        .create_group(&group)
+        .map_err(|_| Status::BadRequest)
+}
+
+#[post("/group", format = "application/json", data = "<group>")]
+fn group_update(
+    auth: RequestAuthorizor,
+    policy_store: &State<FilePolicyStore>,
+    group: Json<Group>,
+) -> Result<(), Status> {
+    let group = group.into_inner();
+    auth.require("UpdateGroup", &format!("group:{}", group.name))
+        .ok()?;
+    policy_store
+        .update_group(&group)
+        .map_err(|_| Status::BadRequest)
+}
+
 // TODO: Should be able to load the PolicyStore trait from the guard.
 // TODO: Rather than getting the authorizer here, maybe derive a concrete
 //       AuthenticatedPolicyStore which wraps calls to the underlying store?
@@ -257,7 +285,9 @@ pub fn launch() -> Rocket<Build> {
                 user_create,
                 user_set_password,
                 user_update,
-                group_list
+                group_list,
+                group_create,
+                group_update
             ],
         )
         .mount("/", routes![spa_files])

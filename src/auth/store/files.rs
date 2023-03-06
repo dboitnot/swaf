@@ -92,6 +92,11 @@ impl FilePolicyStore {
         )
         .map_err(|e| warn!("Error creating user: {:?}", e))
     }
+
+    fn store_group(&self, create_new: bool, group: &Group) -> Result<(), ()> {
+        store(&self.group_dir, &group.name, create_new, group)
+            .map_err(|e| warn!("Error creating group: {:?}", e))
+    }
 }
 
 impl PolicyStore for FilePolicyStore {
@@ -139,6 +144,14 @@ impl PolicyStore for FilePolicyStore {
 
     fn group_named(&self, name: &str) -> Option<Group> {
         self.load_group(name).ok()
+    }
+
+    fn create_group(&self, group: &Group) -> Result<(), ()> {
+        self.store_group(true, group)
+    }
+
+    fn update_group(&self, group: &Group) -> Result<(), ()> {
+        self.store_group(false, group)
     }
 }
 

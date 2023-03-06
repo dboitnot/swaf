@@ -3,9 +3,7 @@
   "automatically created by": "elm-review suppress",
   "learn more": "elm-review suppress --help",
   "suppressions": [
-    { "count": 1, "filePath": "src/Pages/Admin/Groups.elm" },
     { "count": 1, "filePath": "src/Pages/Browse.elm" },
-    { "count": 1, "filePath": "src/PolicyEditor.elm" },
     { "count": 1, "filePath": "src/Shared.elm" }
   ]
 }

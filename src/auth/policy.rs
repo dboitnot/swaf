@@ -61,11 +61,15 @@ impl PolicyStatement {
 
 pub trait PolicyStore {
     fn list_users(&self) -> Result<Vec<User>, ()>;
+    fn user_named(&self, name: &str) -> Result<User, ()>;
     fn create_user(&self, user: &User) -> Result<(), ()>;
     fn update_user(&self, user: &User) -> Result<(), ()>;
+
     fn set_user_password(&self, login_name: &str, password: Option<&str>) -> Result<(), ()>;
     fn authenticate_user(&self, login_name: &str, password: &str) -> Result<User, ()>;
-    fn user_named(&self, name: &str) -> Result<User, ()>;
+
     fn list_groups(&self) -> Result<Vec<Group>, ()>;
     fn group_named(&self, name: &str) -> Option<Group>;
+    fn create_group(&self, group: &Group) -> Result<(), ()>;
+    fn update_group(&self, group: &Group) -> Result<(), ()>;
 }
