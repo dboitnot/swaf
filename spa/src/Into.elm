@@ -1,4 +1,18 @@
-module Into exposing (Into(..), Zipper(..), compose, into, map, map2, set, thenInto, thenIntoMaybe, unzip, value)
+module Into exposing
+    ( Into(..)
+    , Zipper(..)
+    , compose
+    , into
+    , listAppend
+    , map
+    , map2
+    , set
+    , setter
+    , thenInto
+    , thenIntoMaybe
+    , unzip
+    , value
+    )
 
 
 type Into outer inner
@@ -34,6 +48,16 @@ compose mi om =
                         |> Maybe.map (\m -> upOuter m o)
                         |> Maybe.withDefault o
                 )
+
+
+setter : Into outer inner -> (inner -> outer -> outer)
+setter i =
+    case i of
+        Lens _ up ->
+            up
+
+        Optional _ up ->
+            up
 
 
 type Zipper focus root
@@ -135,7 +159,6 @@ unzip =
     map identity
 
 
-
--- listAppend : item -> Zipper (List item) root -> root
--- listAppend item =
---     map (\l -> l ++ [ item ])
+listAppend : item -> Zipper (List item) root -> root
+listAppend item =
+    map (\l -> l ++ [ item ])

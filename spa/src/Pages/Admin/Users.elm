@@ -2,7 +2,7 @@ module Pages.Admin.Users exposing (Model, Msg, SortOn, page)
 
 import Api
 import Api.Response as R exposing (Response)
-import Cmd.Extra exposing (addCmd, withNoCmd)
+import Cmd.Extra exposing (addCmd, withCmd, withNoCmd)
 import CrudView exposing (ErrorMessage, crudView)
 import Editing exposing (Editing(..), isCreating, isUpdating)
 import Gen.Params.Admin.Users exposing (Params)
@@ -23,22 +23,14 @@ import PolicyTable
 import RemoteData exposing (WebData)
 import Request
 import Shared exposing (User)
-import Util
-    exposing
-        ( flattenMaybeList
-        , httpErrorToString
-        , maybeEmptyString
-        , maybeIs
-        , sortBy
-        )
+import Util exposing (httpErrorToString, maybeEmptyString, maybeIs, sortBy)
+import Ux.InputField as InputField
+import Ux.TextInputField as TextInputField
 import View exposing (View)
 import W.Button
 import W.Container
 import W.Divider
-import W.InputField
-import W.InputText
 import W.Menu
-import W.Message
 import W.Popover
 import W.Table
 import W.Tag
@@ -186,7 +178,8 @@ update sharedModel req msg model =
             PolicyEditor.update openStatement openUserStatements model e |> withNoCmd
 
         EditSaveClicked ->
-            editSaveClicked sharedModel model
+            { model | openUser = Editing.toLoading model.openUser }
+                |> withCmd (Api.saveUser UserUpdated sharedModel model.openUser)
 
         EditCancelled ->
             ( { model | openUser = NotEditing }, Cmd.none )
@@ -228,19 +221,6 @@ startEditing model edit =
       }
     , Cmd.none
     )
-
-
-editSaveClicked : Shared.Model -> Model -> ( Model, Cmd Msg )
-editSaveClicked sharedModel model =
-    case model.openUser of
-        Creating user ->
-            ( { model | openUser = CreateLoading user }, Api.createUser UserUpdated sharedModel user )
-
-        Updating user ->
-            ( { model | openUser = UpdateLoading user }, Api.updateUser UserUpdated sharedModel user )
-
-        _ ->
-            ( model, Cmd.none )
 
 
 updateError : Model -> String -> Http.Error -> Model
@@ -342,21 +322,23 @@ openItemIsValid model =
 editView : Model -> UserInfo -> H.Html Msg
 editView model user =
     W.Container.view [ W.Container.vertical ]
-        ([ textInputField "Login Name"
-            [ W.InputText.readOnly (isUpdating model.openUser) ]
-            .loginName
-            (\v u -> { u | loginName = v })
-            loginNameValidationMessage
-            user
-         , textInputField "Full Name"
+        ([ TextInputField.view
+            [ TextInputField.readOnly (isUpdating model.openUser)
+            , TextInputField.validationMessage (loginNameValidationMessage user.loginName)
+            ]
+            { label = "Login Name"
+            , value = user.loginName
+            , onInput = StringFieldEdited (I.setter UserInfo.loginName)
+            }
+         , TextInputField.view []
+            { label = "Full Name"
+            , value = Maybe.withDefault "" user.fullName
+            , onInput = StringFieldEdited (\v u -> { u | fullName = maybeEmptyString v })
+            }
+         , InputField.view "Password" [] (PR.view { wrapperMsg = PasswordMsg, model = model.pwResetModel })
+         , InputField.view "Groups" [] (groupList (Just model) user.groups)
+         , InputField.view "Permissions"
             []
-            (\u -> Maybe.withDefault "" u.fullName)
-            (\v u -> { u | fullName = maybeEmptyString v })
-            (always Nothing)
-            user
-         , inputField "Password" (PR.view { wrapperMsg = PasswordMsg, model = model.pwResetModel })
-         , inputField "Groups" (groupList (Just model) user.groups)
-         , inputField "Permissions"
             (PolicyTable.view
                 { onClick = PolicyTableClicked
                 , onAdd = AddPolicyClicked
@@ -379,43 +361,6 @@ policyEditor model =
 
         Indexed.Append stm ->
             [ PolicyEditor.view PolicyEditorEvent stm ]
-
-
-inputField : String -> H.Html Msg -> H.Html Msg
-inputField label input =
-    W.InputField.view [] { label = [ H.text label ], input = [ input ] }
-
-
-validatedInputField : String -> H.Html Msg -> Maybe String -> H.Html Msg
-validatedInputField label input validationMessage =
-    inputField label
-        (W.Container.view [ W.Container.vertical ]
-            (flattenMaybeList
-                [ Just input
-                , validationMessage
-                    |> Maybe.map (\m -> W.Message.view [ W.Message.danger ] [ H.text m ])
-                ]
-            )
-        )
-
-
-textInputField :
-    String
-    -> List (W.InputText.Attribute Msg)
-    -> (UserInfo -> String)
-    -> (String -> UserInfo -> UserInfo)
-    -> (String -> Maybe String)
-    -> UserInfo
-    -> H.Html Msg
-textInputField label attrs get set validator user =
-    let
-        value : String
-        value =
-            get user
-    in
-    validatedInputField label
-        (W.InputText.view attrs { onInput = StringFieldEdited set, value = value })
-        (validator value)
 
 
 
