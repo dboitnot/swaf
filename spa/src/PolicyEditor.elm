@@ -1,4 +1,4 @@
-module PolicyEditor exposing (IndexedStatement, Msg(..), update, view)
+module PolicyEditor exposing (IndexedStatement, Msg(..), indexedView, update)
 
 import Html as H
 import Indexed exposing (Indexed)
@@ -26,6 +26,44 @@ type Msg
 
 type alias IndexedStatement =
     Indexed PolicyStatement
+
+
+indexedView : (Msg -> msg) -> IndexedStatement -> H.Html msg
+indexedView wrapperMsg idx =
+    Indexed.item idx
+        |> Maybe.map (view wrapperMsg)
+        |> Maybe.withDefault (H.text "")
+
+
+view : (Msg -> msg) -> PolicyStatement -> H.Html msg
+view wrapperMsg stmt =
+    W.Modal.view []
+        { isOpen = True
+        , onClose = Nothing
+        , content =
+            [ W.Container.view [ W.Container.vertical, W.Container.pad_4 ]
+                [ W.InputRadio.view []
+                    { id = "policyStatementEffect"
+                    , value = stmt.effect
+                    , options = [ Allow, Deny ]
+                    , toValue = PolicyEffect.toString
+                    , toLabel = PolicyEffect.toString
+                    , onInput = \e -> wrapperMsg (EffectChanged e)
+                    }
+                , stringListView "Actions" ActionsChanged wrapperMsg stmt.actions
+                , stringListView "Resources" ResourcesChanged wrapperMsg stmt.resources
+                , W.Container.view [ W.Container.horizontal, W.Container.spaceBetween ]
+                    [ W.Button.view
+                        [ W.Button.danger ]
+                        { label = [ H.text "Delete" ], onClick = wrapperMsg DeleteClicked }
+                    , W.Container.view [ W.Container.horizontal, W.Container.alignRight, W.Container.gap_2 ]
+                        [ W.Button.view [] { label = [ H.text "Cancel" ], onClick = wrapperMsg CancelClicked }
+                        , W.Button.view [ W.Button.primary ] { label = [ H.text "Ok" ], onClick = wrapperMsg OkClicked }
+                        ]
+                    ]
+                ]
+            ]
+        }
 
 
 update : I.Into model IndexedStatement -> I.Into model (List PolicyStatement) -> model -> Msg -> model
@@ -85,37 +123,6 @@ cleanList : List String -> List String
 cleanList l =
     List.map String.trim l
         |> List.filter (\s -> not (String.isEmpty s))
-
-
-view : (Msg -> msg) -> PolicyStatement -> H.Html msg
-view wrapperMsg stmt =
-    W.Modal.view []
-        { isOpen = True
-        , onClose = Nothing
-        , content =
-            [ W.Container.view [ W.Container.vertical, W.Container.pad_4 ]
-                [ W.InputRadio.view []
-                    { id = "policyStatementEffect"
-                    , value = stmt.effect
-                    , options = [ Allow, Deny ]
-                    , toValue = PolicyEffect.toString
-                    , toLabel = PolicyEffect.toString
-                    , onInput = \e -> wrapperMsg (EffectChanged e)
-                    }
-                , stringListView "Actions" ActionsChanged wrapperMsg stmt.actions
-                , stringListView "Resources" ResourcesChanged wrapperMsg stmt.resources
-                , W.Container.view [ W.Container.horizontal, W.Container.spaceBetween ]
-                    [ W.Button.view
-                        [ W.Button.danger ]
-                        { label = [ H.text "Delete" ], onClick = wrapperMsg DeleteClicked }
-                    , W.Container.view [ W.Container.horizontal, W.Container.alignRight, W.Container.gap_2 ]
-                        [ W.Button.view [] { label = [ H.text "Cancel" ], onClick = wrapperMsg CancelClicked }
-                        , W.Button.view [ W.Button.primary ] { label = [ H.text "Ok" ], onClick = wrapperMsg OkClicked }
-                        ]
-                    ]
-                ]
-            ]
-        }
 
 
 stringListView : String -> (String -> Msg) -> (Msg -> msg) -> List String -> H.Html msg

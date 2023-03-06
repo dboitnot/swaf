@@ -1,4 +1,4 @@
-module Indexed exposing (Indexed(..), indexOpt, itemOpt, setInList)
+module Indexed exposing (Indexed(..), indexOpt, item, itemOpt, setInList)
 
 import Into exposing (Into(..))
 import Util exposing (updateListAt)

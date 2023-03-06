@@ -1,4 +1,4 @@
-module Model.GroupInfo exposing (GroupInfo, decoder, encoder, new, policyStatements)
+module Model.GroupInfo exposing (GroupInfo, decoder, encoder, name, new, policyStatements)
 
 import Into as I
 import Json.Decode as D exposing (Decoder, list, maybe)
@@ -42,6 +42,15 @@ new =
     }
 
 
+
+-- Into
+
+
 policyStatements : I.Into GroupInfo (List PolicyStatement)
 policyStatements =
     I.Lens .policyStatements (\v o -> { o | policyStatements = v })
+
+
+name : I.Into GroupInfo String
+name =
+    I.Lens .name (\v o -> { o | name = v })

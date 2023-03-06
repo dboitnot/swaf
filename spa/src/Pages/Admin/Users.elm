@@ -322,7 +322,7 @@ openItemIsValid model =
 editView : Model -> UserInfo -> H.Html Msg
 editView model user =
     W.Container.view [ W.Container.vertical ]
-        ([ TextInputField.view
+        [ TextInputField.view
             [ TextInputField.readOnly (isUpdating model.openUser)
             , TextInputField.validationMessage (loginNameValidationMessage user.loginName)
             ]
@@ -330,14 +330,14 @@ editView model user =
             , value = user.loginName
             , onInput = StringFieldEdited (I.setter UserInfo.loginName)
             }
-         , TextInputField.view []
+        , TextInputField.view []
             { label = "Full Name"
             , value = Maybe.withDefault "" user.fullName
             , onInput = StringFieldEdited (\v u -> { u | fullName = maybeEmptyString v })
             }
-         , InputField.view "Password" [] (PR.view { wrapperMsg = PasswordMsg, model = model.pwResetModel })
-         , InputField.view "Groups" [] (groupList (Just model) user.groups)
-         , InputField.view "Permissions"
+        , InputField.view "Password" [] (PR.view { wrapperMsg = PasswordMsg, model = model.pwResetModel })
+        , InputField.view "Groups" [] (groupList (Just model) user.groups)
+        , InputField.view "Permissions"
             []
             (PolicyTable.view
                 { onClick = PolicyTableClicked
@@ -345,22 +345,8 @@ editView model user =
                 , policies = user.policyStatements
                 }
             )
-         ]
-            ++ policyEditor model
-        )
-
-
-policyEditor : Model -> List (H.Html Msg)
-policyEditor model =
-    case model.openStatement of
-        Indexed.None ->
-            []
-
-        Indexed.At _ stm ->
-            [ PolicyEditor.view PolicyEditorEvent stm ]
-
-        Indexed.Append stm ->
-            [ PolicyEditor.view PolicyEditorEvent stm ]
+        , PolicyEditor.indexedView PolicyEditorEvent model.openStatement
+        ]
 
 
 

@@ -3,7 +3,6 @@ module Into exposing
     , Zipper(..)
     , compose
     , into
-    , listAppend
     , map
     , map2
     , set
@@ -159,6 +158,7 @@ unzip =
     map identity
 
 
-listAppend : item -> Zipper (List item) root -> root
-listAppend item =
-    map (\l -> l ++ [ item ])
+
+-- listAppend : item -> Zipper (List item) root -> root
+-- listAppend item =
+--     map (\l -> l ++ [ item ])

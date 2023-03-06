@@ -1,4 +1,4 @@
-module Model.UserInfo exposing (UserInfo, decoder, encoder, fullName, loginName, policyStatements)
+module Model.UserInfo exposing (UserInfo, decoder, encoder, loginName, policyStatements)
 
 import Into exposing (Into(..))
 import Json.Decode as D exposing (Decoder, list, maybe)
@@ -51,6 +51,7 @@ policyStatements =
     Lens .policyStatements (\v u -> { u | policyStatements = v })
 
 
-fullName : Into UserInfo (Maybe String)
-fullName =
-    Lens .fullName (\v u -> { u | fullName = v })
+
+-- fullName : Into UserInfo (Maybe String)
+-- fullName =
+--     Lens .fullName (\v u -> { u | fullName = v })

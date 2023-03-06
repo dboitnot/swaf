@@ -2,24 +2,18 @@ module Pages.Admin.Groups exposing (Model, Msg, page)
 
 import Api
 import Api.Response as R exposing (Response)
-import Cmd.Extra exposing (addCmd, withCmd, withNoCmd)
+import Cmd.Extra exposing (withCmd, withNoCmd)
 import CrudView exposing (ErrorMessage, crudView)
-import Editing exposing (Editing(..), isCreating, isUpdating)
+import Editing exposing (Editing(..), isUpdating)
 import Gen.Params.Admin.Groups exposing (Params)
-import Gen.Params.Admin.Users exposing (Params)
 import Html as H
-import Html.Attributes as A
 import Http
-import Icons
 import Indexed
 import Into as I exposing (Into(..))
 import Model.GroupInfo as GroupInfo exposing (GroupInfo)
 import Model.GroupList exposing (GroupList)
 import Model.PolicyStatement as PolicyStatement exposing (PolicyStatement)
-import Model.UserInfo as UserInfo exposing (UserInfo)
-import Model.UserList exposing (UserList)
 import Page
-import PasswordReset as PR
 import PolicyEditor exposing (IndexedStatement)
 import PolicyTable
 import RemoteData exposing (WebData)
@@ -27,25 +21,16 @@ import Request
 import Shared exposing (User)
 import Util
     exposing
-        ( deleteInList
-        , flattenMaybeList
-        , httpErrorToString
+        ( httpErrorToString
         , maybeEmptyString
         , maybeIs
-        , sortBy
-        , updateListAt
         )
+import Ux.InputField as InputField
+import Ux.TextInputField as TextInputField
 import View exposing (View)
 import W.Button
 import W.Container
-import W.Divider
-import W.InputField
-import W.InputText
-import W.Menu
-import W.Message
-import W.Popover
 import W.Table
-import W.Tag
 
 
 page : Shared.Model -> Request.With Params -> Page.With Model Msg
@@ -190,22 +175,52 @@ getGroups =
 
 view : User -> Model -> View Msg
 view user model =
-    -- crudView
-    --     { title = "Groups"
-    --     , user = user
-    --     , items = model.groups
-    --     , listColumns = [ W.Table.string [] { label = "Group Name", value = .name } ]
-    --     , itemListKey = .groups
-    --     , buttonBar = [ W.Button.view [ W.Button.primary ] { label = [ H.text "Create Group" ], onClick = CreateClicked } ]
-    --     , onListClick = GroupClicked
-    --     , openItem = model.openGroup
-    --     , openItemIsValid = openItemIsValid model
-    --     , editView = editView model
-    --     , onSave = EditSaveClicked
-    --     , onCancelEdit = EditCancelled
-    --     , errorMessage = model.errorMessage
-    --     }
-    View.placeholder "Groups"
+    crudView
+        { title = "Groups"
+        , user = user
+        , items = model.groups
+        , listColumns =
+            [ W.Table.string [] { label = "Group Name", value = .name }
+            , W.Table.string [] { label = "Description", value = \u -> Maybe.withDefault "<None>" u.description }
+            ]
+        , itemListKey = .groups
+        , buttonBar = [ W.Button.view [ W.Button.primary ] { label = [ H.text "Create Group" ], onClick = CreateClicked } ]
+        , onListClick = GroupClicked
+        , openItem = model.openGroup
+        , openItemIsValid = openItemIsValid model
+        , editView = editView model
+        , onSave = EditSaveClicked
+        , onCancelEdit = EditCancelled
+        , errorMessage = model.errorMessage
+        }
+
+
+editView : Model -> GroupInfo -> H.Html Msg
+editView model group =
+    W.Container.view [ W.Container.vertical ]
+        [ TextInputField.view
+            [ TextInputField.readOnly (isUpdating model.openGroup)
+            , TextInputField.validationMessage (nameValidationMessage group.name)
+            ]
+            { label = "Group Name"
+            , value = group.name
+            , onInput = StringFieldEdited (I.setter GroupInfo.name)
+            }
+        , TextInputField.view []
+            { label = "Description"
+            , value = Maybe.withDefault "" group.description
+            , onInput = StringFieldEdited (\v u -> { u | description = maybeEmptyString v })
+            }
+        , InputField.view "Permissions"
+            []
+            (PolicyTable.view
+                { onClick = PolicyTableClicked
+                , onAdd = AddPolicyClicked
+                , policies = group.policyStatements
+                }
+            )
+        , PolicyEditor.indexedView PolicyEditorEvent model.openStatement
+        ]
 
 
 nameValidationMessage : String -> Maybe String
@@ -231,5 +246,5 @@ openItemIsValid model =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions model =
+subscriptions _ =
     Sub.none
